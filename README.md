@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Progressus
 
-## Getting Started
+O **Progressus** é uma plataforma web de gerenciamento de projetos e tarefas desenvolvida como Trabalho de Conclusão de Curso (TCC) de Engenharia de Software.
 
-First, run the development server:
+O sistema foi criado com o objetivo de centralizar comunicação, organização de tarefas e acompanhamento de projetos em um único ambiente, oferecendo uma experiência simples, intuitiva e eficiente.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Objetivo
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+O projeto busca solucionar problemas comuns encontrados em ferramentas de gestão atuais, como:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Fragmentação de informações;
+- Dificuldade no acompanhamento de tarefas;
+- Falhas de comunicação entre equipes;
+- Excesso de funcionalidades complexas.
 
-## Learn More
+O foco principal do sistema é aumentar a produtividade e facilitar o gerenciamento de projetos.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Funcionalidades
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Cadastro e autenticação de usuários;
+- Recuperação de senha via e-mail;
+- Criação e gerenciamento de projetos;
+- Criação e gerenciamento de tarefas;
+- Visualização em Lista e Kanban;
+- Chat por projeto;
+- Envio de imagens e arquivos;
+- Compartilhamento de projetos;
+- Notificações em tempo real;
+- Integração com Inteligência Artificial.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Funcionalidades com IA
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+A Inteligência Artificial integrada ao sistema permite:
+
+- Sugestão automática de tarefas baseada nas conversas do projeto;
+- Geração de relatórios de progresso;
+- Auxílio no acompanhamento das atividades;
+- Confirmação, edição ou descarte das sugestões feitas pela IA.
+
+---
+
+## Tecnologias Utilizadas
+
+### Front-end
+- React
+- Next.js
+- TypeScript
+- Tailwind CSS
+
+### Back-end
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Supabase Storage
+
+### Inteligência Artificial
+- Gemini API (Google AI)
+
+### Ferramentas
+- Git
+- GitHub
+- Visual Studio Code
+
+---
+
+## Estrutura do Projeto
+
+O sistema foi dividido nos seguintes módulos:
+
+### 1. Gerenciamento de Usuários
+- Cadastro;
+- Login;
+- Recuperação de senha.
+
+### 2. Gerenciamento de Projetos
+- Criação de projetos;
+- Compartilhamento;
+- Exclusão e edição.
+
+### 3. Gerenciamento de Tarefas
+- Cadastro de tarefas;
+- Kanban;
+- Lista de tarefas;
+- Anexos.
+
+### 4. Comunicação
+- Chat por projeto;
+- Mensagens individuais e em grupo;
+- Envio de arquivos.
+
+### 5. Inteligência Artificial
+- Sugestão de tarefas;
+- Relatórios automáticos;
+- Notificações inteligentes.
+
+---
+
+## Metodologia
+
+O desenvolvimento do projeto utiliza metodologia ágil baseada em Scrum, trabalhando com sprints e desenvolvimento incremental.
+
+---
+
+## Público-Alvo
+
+O sistema é voltado para:
+
+- Estudantes;
+- Profissionais autônomos;
+- Pequenas e médias equipes;
+- Usuários que precisam organizar projetos e tarefas de forma centralizada.
+
+---
+
+## Autores
+
+- João Gustavo Paiva Deboleto
+- Flávia Teruya de Oliveira
+
+### Orientador
+- André Martins do Nascimento
+
+---
+
+## Licença
+
+Projeto acadêmico desenvolvido para fins educacionais.
