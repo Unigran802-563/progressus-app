@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useState } from 'react';
+import { Check, Eye, EyeOff, Lock, Mail, User, UserPlus } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import type { RegisterFormData } from '@/types';
@@ -21,6 +22,8 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
@@ -62,21 +65,7 @@ export default function RegisterPage() {
     <section className="w-full max-w-[500px] rounded-3xl bg-white px-8 py-9 text-slate-950 shadow-2xl shadow-slate-950/25 sm:px-10">
       <div className="mb-7 flex flex-col items-center text-center">
         <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3b1d7a] text-white shadow-lg shadow-purple-900/30">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            className="h-7 w-7"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M19 8v6" />
-            <path d="M22 11h-6" />
-          </svg>
+          <UserPlus className="h-7 w-7" aria-hidden="true" />
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
@@ -96,19 +85,7 @@ export default function RegisterPage() {
 
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21a8 8 0 0 0-16 0" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
+              <User className="h-5 w-5" aria-hidden="true" />
             </span>
 
             <input
@@ -131,19 +108,7 @@ export default function RegisterPage() {
 
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 4h16v16H4z" />
-                <path d="m22 6-10 7L2 6" />
-              </svg>
+              <Mail className="h-5 w-5" aria-hidden="true" />
             </span>
 
             <input
@@ -166,31 +131,32 @@ export default function RegisterPage() {
 
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+              <Lock className="h-5 w-5" aria-hidden="true" />
             </span>
 
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={formData.password}
               onChange={handleChange}
               placeholder="Crie uma senha segura"
               autoComplete="new-password"
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
             />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition hover:text-[#3b1d7a]"
+              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Eye className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
           </div>
 
           <p className="mt-2 text-xs leading-5 text-slate-500">
@@ -205,30 +171,32 @@ export default function RegisterPage() {
 
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              <Check className="h-5 w-5" aria-hidden="true" />
             </span>
 
             <input
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Repita sua senha"
               autoComplete="new-password"
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
             />
+
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((current) => !current)}
+              className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition hover:text-[#3b1d7a]"
+              aria-label={showConfirmPassword ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'}
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Eye className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
           </div>
         </div>
 
