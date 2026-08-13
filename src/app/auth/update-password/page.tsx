@@ -64,21 +64,19 @@ export default function UpdatePasswordPage() {
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
-  const isSamePassword =
-    error.code === 'same_password' ||
-    error.message.toLowerCase().includes('same as the old password') ||
-    error.message.toLowerCase().includes('different from the old password');
+      const isSamePassword =
+        error.code === 'same_password' ||
+        error.message.toLowerCase().includes('same as the old password') ||
+        error.message.toLowerCase().includes('different from the old password');
 
-  setFeedbackMessage(
-    isSamePassword
-      ? 'A nova senha não pode ser igual à senha anterior. Escolha uma senha diferente.'
-      : 'Não foi possível atualizar a senha. Solicite um novo link e tente novamente.'
-  );
-
-  setIsSubmitting(false);
-  return;
-}
-
+      setFeedbackMessage(
+        isSamePassword
+          ? 'A nova senha não pode ser igual à senha anterior. Escolha uma senha diferente.'
+          : 'Não foi possível atualizar a senha. Solicite um novo link e tente novamente.'
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
     setIsSuccess(true);
     setFeedbackMessage('Senha atualizada com sucesso. Redirecionando para o Progressus...');
@@ -90,25 +88,30 @@ export default function UpdatePasswordPage() {
 
   if (isValidLink === null) {
     return (
-      <section className="w-full max-w-[460px] rounded-3xl bg-white px-8 py-9 text-center text-sm text-slate-500 shadow-2xl shadow-slate-950/25 sm:px-10">
-        Validando link de recuperação...
+      <section className="card-elevated p-6 text-center sm:p-8">
+        <span className="mx-auto grid size-11 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
+          <KeyRound className="size-5" aria-hidden="true" />
+        </span>
+        <p className="mt-4 text-sm text-muted-foreground">Validando link de recuperação...</p>
       </section>
     );
   }
 
   if (!isValidLink) {
     return (
-      <section className="w-full max-w-[460px] rounded-3xl bg-white px-8 py-9 text-center text-slate-950 shadow-2xl shadow-slate-950/25 sm:px-10">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-          <KeyRound className="h-7 w-7" aria-hidden="true" />
-        </div>
-        <h1 className="text-2xl font-bold">Link inválido ou expirado</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
-          Solicite um novo link de recuperação de senha para continuar.
+      <section className="card-elevated p-6 text-center sm:p-8">
+        <span className="mx-auto grid size-11 place-items-center rounded-xl bg-danger/15 text-danger ring-1 ring-danger/25">
+          <KeyRound className="size-5" aria-hidden="true" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-bold text-foreground">
+          Link inválido ou expirado
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Solicite um novo link de recuperação para continuar com segurança.
         </p>
         <Link
           href="/auth/forgot-password"
-          className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-[#3b1d7a] px-5 text-sm font-semibold text-white transition hover:bg-[#2d145f]"
+          className="glow-accent mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
         >
           Solicitar novo link
         </Link>
@@ -117,22 +120,29 @@ export default function UpdatePasswordPage() {
   }
 
   return (
-    <section className="w-full max-w-[460px] rounded-3xl bg-white px-8 py-9 text-slate-950 shadow-2xl shadow-slate-950/25 sm:px-10">
-      <div className="mb-7 text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3b1d7a] text-white shadow-lg shadow-purple-900/30">
-          <KeyRound className="h-7 w-7" aria-hidden="true" />
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Criar nova senha</h1>
-        <p className="mt-2 text-sm text-slate-500">Escolha uma senha segura para acessar sua conta.</p>
-      </div>
+    <section className="card-elevated p-6 sm:p-8">
+      <header className="mb-7">
+        <span className="grid size-11 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
+          <KeyRound className="size-5" aria-hidden="true" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-bold text-foreground sm:text-3xl">
+          Criar nova senha
+        </h1>
+        <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+          Escolha uma senha segura para recuperar o acesso à sua conta.
+        </p>
+      </header>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-900">
+        <div className="space-y-1.5">
+          <label htmlFor="password" className="block text-xs font-semibold text-foreground">
             Nova senha
           </label>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <Lock
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               id="password"
               type={showPassword ? 'text' : 'password'}
@@ -140,28 +150,35 @@ export default function UpdatePasswordPage() {
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
               required
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-11 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
             <button
               type="button"
               onClick={() => setShowPassword((current) => !current)}
-              className="absolute inset-y-0 right-0 px-4 text-slate-400 transition hover:text-[#3b1d7a]"
+              className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-xl text-muted-foreground transition hover:text-foreground"
               aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
             >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {showPassword ? (
+                <EyeOff className="size-4" aria-hidden="true" />
+              ) : (
+                <Eye className="size-4" aria-hidden="true" />
+              )}
             </button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
+          <p className="text-[11px] leading-5 text-muted-foreground">
             Mínimo de 8 caracteres, uma letra maiúscula, um número e um caractere especial.
           </p>
         </div>
 
-        <div>
-          <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-slate-900">
+        <div className="space-y-1.5">
+          <label htmlFor="confirmPassword" className="block text-xs font-semibold text-foreground">
             Confirmar nova senha
           </label>
           <div className="relative">
-            <Check className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <Check
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               id="confirmPassword"
               type={showConfirmPassword ? 'text' : 'password'}
@@ -169,21 +186,32 @@ export default function UpdatePasswordPage() {
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
               required
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-11 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
             <button
               type="button"
               onClick={() => setShowConfirmPassword((current) => !current)}
-              className="absolute inset-y-0 right-0 px-4 text-slate-400 transition hover:text-[#3b1d7a]"
-              aria-label={showConfirmPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-xl text-muted-foreground transition hover:text-foreground"
+              aria-label={showConfirmPassword ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'}
             >
-              {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {showConfirmPassword ? (
+                <EyeOff className="size-4" aria-hidden="true" />
+              ) : (
+                <Eye className="size-4" aria-hidden="true" />
+              )}
             </button>
           </div>
         </div>
 
         {feedbackMessage && (
-          <div className={`rounded-xl border px-4 py-3 text-sm leading-6 ${isSuccess ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+          <div
+            role="status"
+            className={`rounded-xl border px-3.5 py-3 text-sm leading-5 ${
+              isSuccess
+                ? 'border-success/35 bg-success/10 text-success'
+                : 'border-danger/35 bg-danger/10 text-danger'
+            }`}
+          >
             {feedbackMessage}
           </div>
         )}
@@ -191,9 +219,9 @@ export default function UpdatePasswordPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#3b1d7a] px-4 text-sm font-semibold text-white shadow-lg shadow-purple-900/20 transition hover:bg-[#2d145f] disabled:cursor-not-allowed disabled:opacity-70"
+          className="glow-accent flex h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSubmitting ? 'Atualizando...' : 'Redefinir senha'}
+          {isSubmitting ? 'Atualizando senha...' : 'Redefinir senha'}
         </button>
       </form>
     </section>

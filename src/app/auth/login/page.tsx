@@ -16,7 +16,6 @@ export default function LoginPage() {
     email: '',
     password: '',
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
@@ -50,32 +49,31 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="w-full max-w-[460px] rounded-3xl bg-white px-8 py-9 text-slate-950 shadow-2xl shadow-slate-950/25 sm:px-10">
-      <div className="mb-7 flex flex-col items-center text-center">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3b1d7a] text-white shadow-lg shadow-purple-900/30">
-          <LogIn className="h-7 w-7" aria-hidden="true" />
-        </div>
+    <section className="card-elevated p-6 sm:p-8">
+      <header className="mb-7">
+        <span className="grid size-11 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
+          <LogIn className="size-5" aria-hidden="true" />
+        </span>
 
-        <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-          Entrar
+        <h1 className="mt-5 font-display text-2xl font-bold text-foreground sm:text-3xl">
+          Boas-vindas de volta
         </h1>
-
-        <p className="mt-2 text-sm text-slate-500">
-          Acesse sua conta para continuar no Progressus
+        <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+          Acesse sua conta para continuar acompanhando seu progresso.
         </p>
-      </div>
+      </header>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-900">
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="block text-xs font-semibold text-foreground">
             E-mail
           </label>
 
           <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <Mail className="h-5 w-5" aria-hidden="true" />
-            </span>
-
+            <Mail
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               id="email"
               name="email"
@@ -84,30 +82,30 @@ export default function LoginPage() {
               onChange={handleChange}
               placeholder="seuemail@exemplo.com"
               autoComplete="email"
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              required
+              className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-4 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </div>
         </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-4">
-            <label htmlFor="password" className="block text-sm font-medium text-slate-900">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-4">
+            <label htmlFor="password" className="block text-xs font-semibold text-foreground">
               Senha
             </label>
-
             <Link
               href="/auth/forgot-password"
-              className="text-xs font-medium text-[#3b1d7a] transition hover:text-[#2d145f]"
+              className="text-xs font-medium text-primary transition-opacity hover:opacity-80"
             >
               Esqueci minha senha
             </Link>
           </div>
 
           <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-              <Lock className="h-5 w-5" aria-hidden="true" />
-            </span>
-
+            <Lock
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               id="password"
               name="password"
@@ -116,19 +114,19 @@ export default function LoginPage() {
               onChange={handleChange}
               placeholder="Digite sua senha"
               autoComplete="current-password"
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#3b1d7a] focus:ring-4 focus:ring-purple-900/10"
+              required
+              className="h-11 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-11 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
-
             <button
               type="button"
               onClick={() => setShowPassword((current) => !current)}
-              className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition hover:text-[#3b1d7a]"
+              className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-xl text-muted-foreground transition hover:text-foreground"
               aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
             >
               {showPassword ? (
-                <EyeOff className="h-5 w-5" aria-hidden="true" />
+                <EyeOff className="size-4" aria-hidden="true" />
               ) : (
-                <Eye className="h-5 w-5" aria-hidden="true" />
+                <Eye className="size-4" aria-hidden="true" />
               )}
             </button>
           </div>
@@ -136,10 +134,11 @@ export default function LoginPage() {
 
         {feedbackMessage && (
           <div
-            className={`rounded-xl border px-4 py-3 text-sm leading-6 ${
+            role="status"
+            className={`rounded-xl border px-3.5 py-3 text-sm leading-5 ${
               isSuccess
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-rose-200 bg-rose-50 text-rose-700'
+                ? 'border-success/35 bg-success/10 text-success'
+                : 'border-danger/35 bg-danger/10 text-danger'
             }`}
           >
             {feedbackMessage}
@@ -149,23 +148,23 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#3b1d7a] px-4 text-sm font-semibold text-white shadow-lg shadow-purple-900/20 transition hover:bg-[#2d145f] disabled:cursor-not-allowed disabled:opacity-70"
+          className="glow-accent flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSubmitting ? 'Entrando...' : 'Entrar'}
-          {!isSubmitting && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+          {isSubmitting ? 'Entrando...' : 'Entrar no Progressus'}
+          {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
         </button>
       </form>
 
-      <div className="my-7 h-px bg-slate-200" />
+      <div className="my-7 h-px bg-border" />
 
-      <p className="text-center text-sm text-slate-500">
+      <p className="text-center text-sm text-muted-foreground">
         Ainda não tem uma conta?{' '}
-        <Link href="/auth/register" className="font-medium text-[#3b1d7a] transition hover:text-[#2d145f]">
+        <Link href="/auth/register" className="font-semibold text-primary transition-opacity hover:opacity-80">
           Criar conta
         </Link>
       </p>
 
-      <p className="mt-4 text-center text-xs text-slate-400">
+      <p className="mt-4 text-center text-[11px] text-muted-foreground/70">
         Acesso seguro ao ambiente Progressus
       </p>
     </section>
