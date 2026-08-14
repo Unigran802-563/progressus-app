@@ -1,23 +1,23 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ChangeEvent, FormEvent, useState } from 'react';
-import { ArrowRight, Eye, EyeOff, Lock, LogIn, Mail } from 'lucide-react';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ChangeEvent, FormEvent, useState } from "react";
+import { ArrowRight, Eye, EyeOff, Lock, LogIn, Mail } from "lucide-react";
 
-import { useAuth } from '@/hooks/useAuth';
-import type { LoginFormData } from '@/types';
+import { useAuth } from "@/hooks/useAuth";
+import type { LoginFormData } from "@/types";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
   const [formData, setFormData] = useState<LoginFormData>({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -34,7 +34,7 @@ export default function LoginPage() {
     event.preventDefault();
 
     setIsSubmitting(true);
-    setFeedbackMessage('');
+    setFeedbackMessage("");
     setIsSuccess(false);
 
     const response = await login(formData);
@@ -44,16 +44,20 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (response.success) {
-      router.push('/');
+      router.push("/");
     }
   }
 
   return (
     <section className="card-elevated p-6 sm:p-8">
       <header className="mb-7">
-        <span className="grid size-11 place-items-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
-          <LogIn className="size-5" aria-hidden="true" />
-        </span>
+        <div className="grid size-12 place-items-center overflow-hidden rounded-2xl bg-[#0e0c17] ring-1 ring-white/5">
+          <img
+            src="/brand/progressus-logo.png"
+            alt="Logo Progressus"
+            className="size-full object-contain p-1"
+          />
+        </div>
 
         <h1 className="mt-5 font-display text-2xl font-bold text-foreground sm:text-3xl">
           Boas-vindas de volta
@@ -65,7 +69,10 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
-          <label htmlFor="email" className="block text-xs font-semibold text-foreground">
+          <label
+            htmlFor="email"
+            className="block text-xs font-semibold text-foreground"
+          >
             E-mail
           </label>
 
@@ -90,7 +97,10 @@ export default function LoginPage() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-4">
-            <label htmlFor="password" className="block text-xs font-semibold text-foreground">
+            <label
+              htmlFor="password"
+              className="block text-xs font-semibold text-foreground"
+            >
               Senha
             </label>
             <Link
@@ -109,7 +119,7 @@ export default function LoginPage() {
             <input
               id="password"
               name="password"
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               value={formData.password}
               onChange={handleChange}
               placeholder="Digite sua senha"
@@ -121,7 +131,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShowPassword((current) => !current)}
               className="absolute inset-y-0 right-0 grid w-10 place-items-center rounded-r-xl text-muted-foreground transition hover:text-foreground"
-              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
             >
               {showPassword ? (
                 <EyeOff className="size-4" aria-hidden="true" />
@@ -137,8 +147,8 @@ export default function LoginPage() {
             role="status"
             className={`rounded-xl border px-3.5 py-3 text-sm leading-5 ${
               isSuccess
-                ? 'border-success/35 bg-success/10 text-success'
-                : 'border-danger/35 bg-danger/10 text-danger'
+                ? "border-success/35 bg-success/10 text-success"
+                : "border-danger/35 bg-danger/10 text-danger"
             }`}
           >
             {feedbackMessage}
@@ -150,16 +160,21 @@ export default function LoginPage() {
           disabled={isSubmitting}
           className="glow-accent flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSubmitting ? 'Entrando...' : 'Entrar no Progressus'}
-          {!isSubmitting && <ArrowRight className="size-4" aria-hidden="true" />}
+          {isSubmitting ? "Entrando..." : "Entrar no Progressus"}
+          {!isSubmitting && (
+            <ArrowRight className="size-4" aria-hidden="true" />
+          )}
         </button>
       </form>
 
       <div className="my-7 h-px bg-border" />
 
       <p className="text-center text-sm text-muted-foreground">
-        Ainda não tem uma conta?{' '}
-        <Link href="/auth/register" className="font-semibold text-primary transition-opacity hover:opacity-80">
+        Ainda não tem uma conta?{" "}
+        <Link
+          href="/auth/register"
+          className="font-semibold text-primary transition-opacity hover:opacity-80"
+        >
           Criar conta
         </Link>
       </p>
