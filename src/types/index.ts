@@ -27,3 +27,28 @@ export type AuthResponse = {
   success: boolean;
   message: string;
 };
+export type ProjectRole = 'owner' | 'member' | 'viewer';
+
+export type Project = {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  archivedAt: string | null;
+};
+
+export type ProjectMember = {
+  projectId: string;
+  userId: string;
+  role: ProjectRole;
+};
+
+export type CreateProjectData = {
+  name: string;
+  description?: string;
+};
+
+export type UpdateProjectData = {
+  name?: string;
+  description?: string | null;
+};

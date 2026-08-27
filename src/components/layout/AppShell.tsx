@@ -27,16 +27,17 @@ type AppShellProps = {
   userName: string;
   userInitial: string;
   onLogout: () => Promise<void> | void;
+  onOpenNewProject?: () => void;
 };
 
 const navigation = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/", available: true },
   {
-    label: "Projetos",
-    icon: FolderKanban,
-    href: "/projects",
-    available: false,
-  },
+  label: "Projetos",
+  icon: FolderKanban,
+  href: "/projects",
+  available: true,
+},
   {
     label: "Minhas tarefas",
     icon: ListChecks,
@@ -87,6 +88,7 @@ export default function AppShell({
   userName,
   userInitial,
   onLogout,
+  onOpenNewProject,
 }: AppShellProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -98,6 +100,17 @@ export default function AppShell({
       "Esta funcionalidade será disponibilizada nas próximas etapas do Progressus.",
     );
     window.setTimeout(() => setNotice(""), 3200);
+  }
+
+  function handleOpenNewProject() {
+    setIsMobileMenuOpen(false);
+
+    if (onOpenNewProject) {
+      onOpenNewProject();
+      return;
+    }
+
+    showUnavailableFeature();
   }
 
   async function handleLogout() {
@@ -188,7 +201,7 @@ export default function AppShell({
         <div className="mt-auto px-1 pb-1">
           <button
             type="button"
-            onClick={showUnavailableFeature}
+            onClick={handleOpenNewProject}
             className="glow-accent flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
           >
             <Plus className="size-4" aria-hidden="true" />
@@ -247,7 +260,7 @@ export default function AppShell({
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={showUnavailableFeature}
+                onClick={handleOpenNewProject}
                 className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-foreground transition hover:bg-accent sm:flex"
               >
                 <Plus className="size-4 text-primary" aria-hidden="true" />
