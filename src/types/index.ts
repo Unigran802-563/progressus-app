@@ -52,3 +52,27 @@ export type UpdateProjectData = {
   name?: string;
   description?: string | null;
 };
+export type InviteRole = 'member' | 'viewer';
+
+export type ProjectOwner = {
+  id: string;
+  name: string;
+};
+
+export type AccessibleProject = Project & {
+  myRole: ProjectRole;
+  owner: ProjectOwner;
+};
+
+export type ProjectParticipant = {
+  userId: string;
+  name: string;
+  email: string;
+  role: ProjectRole;
+};
+
+export type ProjectInvite = {
+  token: string;
+  expiresAt: string;
+  role: InviteRole;
+};

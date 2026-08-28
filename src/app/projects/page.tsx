@@ -6,23 +6,33 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
   CalendarClock,
+  Crown,
   FolderKanban,
   LayoutGrid,
+  Link2,
   List,
   Loader2,
   Plus,
   Search,
   TriangleAlert,
+  UserRound,
 } from "lucide-react";
 
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader } from "@/components/ui/progressus-ui";
-import { createProject, listProjects } from "@/lib/projects";
+import { createProject, listAccessibleProjects } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
-import type { CreateProjectData, Project } from "@/types";
+import type { AccessibleProject, CreateProjectData } from "@/types";
 
 type ViewMode = "grid" | "list";
+type ProjectFilter = "all" | "owned" | "shared";
+
+const filterOptions: Array<{ id: ProjectFilter; label: string }> = [
+  { id: "all", label: "Todos" },
+  { id: "owned", label: "Meus projetos" },
+  { id: "shared", label: "Compartilhados comigo" },
+];
 
 function formatProjectDate(date: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -32,15 +42,60 @@ function formatProjectDate(date: string): string {
   }).format(new Date(date));
 }
 
+function getAccessLabel(project: AccessibleProject): string {
+  if (project.myRole === "owner") return "Criado por você";
+  if (project.myRole === "member") return "Participante";
+  return "Visualizador";
+}
+
+function ProjectOwnershipBadge({ project }: { project: AccessibleProject }) {
+  if (project.myRole === "owner") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+        <Crown className="size-3" aria-hidden="true" />
+        Criado por você
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-info/25 bg-info/10 px-2.5 py-1 text-[11px] font-semibold text-info">
+      <Link2 className="size-3" aria-hidden="true" />
+      Compartilhado
+    </span>
+  );
+}
+
+function OwnerLabel({ project }: { project: AccessibleProject }) {
+  if (project.myRole === "owner") {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px] text-primary">
+        <Crown className="size-3.5" aria-hidden="true" />
+        Você é o proprietário
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-info/15 text-[9px] font-bold text-info ring-1 ring-info/20">
+        {project.owner.name.charAt(0).toUpperCase()}
+      </span>
+      <span className="truncate">Compartilhado por {project.owner.name}</span>
+    </span>
+  );
+}
+
 export default function ProjectsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<AccessibleProject[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [projectError, setProjectError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [activeFilter, setActiveFilter] = useState<ProjectFilter>("all");
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -48,7 +103,7 @@ export default function ProjectsPage() {
     try {
       setIsProjectsLoading(true);
       setProjectError("");
-      setProjects(await listProjects());
+      setProjects(await listAccessibleProjects());
     } catch (error) {
       setProjectError(
         error instanceof Error
@@ -99,23 +154,38 @@ export default function ProjectsPage() {
 
   const userInitial = userName.charAt(0).toUpperCase() || "U";
 
-  const filteredProjects = useMemo(() => {
+  const ownProjects = useMemo(
+    () => projects.filter((project) => project.myRole === "owner"),
+    [projects],
+  );
+  const sharedProjects = useMemo(
+    () => projects.filter((project) => project.myRole !== "owner"),
+    [projects],
+  );
+
+  const visibleProjects = useMemo(() => {
+    const sourceProjects =
+      activeFilter === "owned"
+        ? ownProjects
+        : activeFilter === "shared"
+          ? sharedProjects
+          : projects;
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase("pt-BR");
 
     if (!normalizedQuery) {
-      return projects;
+      return sourceProjects;
     }
 
-    return projects.filter((project) => {
-      const searchableText = `${project.name} ${project.description ?? ""}`;
+    return sourceProjects.filter((project) => {
+      const searchableText = `${project.name} ${project.description ?? ""} ${project.owner.name}`;
 
       return searchableText.toLocaleLowerCase("pt-BR").includes(normalizedQuery);
     });
-  }, [projects, searchQuery]);
+  }, [activeFilter, ownProjects, projects, searchQuery, sharedProjects]);
 
   const projectsSubtitle = isProjectsLoading
     ? "Carregando seus projetos..."
-    : `${projects.length} ${projects.length === 1 ? "projeto" : "projetos"} no seu espaço de trabalho.`;
+    : `${ownProjects.length} ${ownProjects.length === 1 ? "projeto próprio" : "projetos próprios"} e ${sharedProjects.length} ${sharedProjects.length === 1 ? "compartilhado" : "compartilhados com você"}.`;
 
   function showNotice(message: string) {
     setNotice(message);
@@ -123,9 +193,8 @@ export default function ProjectsPage() {
   }
 
   async function handleCreateProject(data: CreateProjectData) {
-    const project = await createProject(data);
-
-    setProjects((currentProjects) => [project, ...currentProjects]);
+    await createProject(data);
+    await loadProjects();
     setIsNewProjectDialogOpen(false);
     showNotice("Projeto criado com sucesso.");
   }
@@ -176,44 +245,102 @@ export default function ProjectsPage() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               type="search"
-              placeholder="Buscar por nome ou descrição"
+              placeholder="Buscar por nome, descrição ou proprietário"
               aria-label="Buscar projetos"
               className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </div>
 
-          <div
-            className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-background p-1"
-            aria-label="Modo de visualização"
-          >
-            <button
-              type="button"
-              aria-label="Visualização em grade"
-              aria-pressed={viewMode === "grid"}
-              onClick={() => setViewMode("grid")}
-              className={`grid size-8 place-items-center rounded-lg transition-colors ${
-                viewMode === "grid"
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+          <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-end">
+            <div
+              className="flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-background p-1"
+              aria-label="Categoria de projetos"
             >
-              <LayoutGrid className="size-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label="Visualização em lista"
-              aria-pressed={viewMode === "list"}
-              onClick={() => setViewMode("list")}
-              className={`grid size-8 place-items-center rounded-lg transition-colors ${
-                viewMode === "list"
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              {filterOptions.map((filter) => {
+                const count =
+                  filter.id === "owned"
+                    ? ownProjects.length
+                    : filter.id === "shared"
+                      ? sharedProjects.length
+                      : projects.length;
+
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.id)}
+                    className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      activeFilter === filter.id
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {filter.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-background p-1"
+              aria-label="Modo de visualização"
             >
-              <List className="size-4" aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                aria-label="Visualização em grade"
+                aria-pressed={viewMode === "grid"}
+                onClick={() => setViewMode("grid")}
+                className={`grid size-8 place-items-center rounded-lg transition-colors ${
+                  viewMode === "grid"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="size-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label="Visualização em lista"
+                aria-pressed={viewMode === "list"}
+                onClick={() => setViewMode("list")}
+                className={`grid size-8 place-items-center rounded-lg transition-colors ${
+                  viewMode === "list"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="size-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </section>
+
+        {!isProjectsLoading && !projectError && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Resumo de propriedade">
+            <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
+              <span className="grid size-9 place-items-center rounded-xl bg-primary/15 text-primary">
+                <Crown className="size-4" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Meus Projetos</p>
+                <p className="text-xs text-muted-foreground">
+                  {ownProjects.length} {ownProjects.length === 1 ? "projeto criado por você" : "projetos criados por você"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-info/20 bg-info/10 px-4 py-3">
+              <span className="grid size-9 place-items-center rounded-xl bg-info/15 text-info">
+                <UserRound className="size-4" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Compartilhados Comigo</p>
+                <p className="text-xs text-muted-foreground">
+                  {sharedProjects.length} {sharedProjects.length === 1 ? "projeto recebido por convite" : "projetos recebidos por convite"}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isProjectsLoading ? (
           <div className="surface-panel flex min-h-64 items-center justify-center">
@@ -239,29 +366,35 @@ export default function ProjectsPage() {
               }
             />
           </div>
-        ) : filteredProjects.length === 0 ? (
+        ) : visibleProjects.length === 0 ? (
           <div className="surface-panel">
             <EmptyState
               icon={<FolderKanban className="size-6" aria-hidden="true" />}
               title={
-                projects.length === 0
-                  ? "Você ainda não possui projetos"
-                  : "Nenhum projeto encontrado"
+                searchQuery
+                  ? "Nenhum projeto encontrado"
+                  : activeFilter === "owned"
+                    ? "Você ainda não criou projetos"
+                    : activeFilter === "shared"
+                      ? "Nenhum projeto foi compartilhado com você"
+                      : "Você ainda não possui projetos"
               }
               description={
-                projects.length === 0
-                  ? "Crie seu primeiro projeto para organizar tarefas, prazos e documentos acadêmicos."
-                  : "Tente buscar por outro nome ou trecho da descrição."
+                searchQuery
+                  ? "Tente buscar por outro nome, descrição ou proprietário."
+                  : activeFilter === "shared"
+                    ? "Os projetos que você aceitar por convite aparecerão nesta área."
+                    : "Crie seu primeiro projeto para organizar tarefas, prazos e documentos acadêmicos."
               }
               action={
-                projects.length === 0 ? (
+                !searchQuery && activeFilter !== "shared" ? (
                   <button
                     type="button"
                     onClick={() => setIsNewProjectDialogOpen(true)}
                     className="glow-accent inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
                   >
                     <Plus className="size-4" aria-hidden="true" />
-                    Criar primeiro projeto
+                    Criar projeto
                   </button>
                 ) : undefined
               }
@@ -272,60 +405,76 @@ export default function ProjectsPage() {
             className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3"
             aria-label="Lista de projetos"
           >
-            {filteredProjects.map((project) => (
+            {visibleProjects.map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="card-elevated flex min-h-52 flex-col gap-4 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30"
+                className="card-elevated flex min-h-56 flex-col gap-4 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="size-2.5 shrink-0 rounded-full bg-primary" />
+                    <span
+                      className={`size-2.5 shrink-0 rounded-full ${
+                        project.myRole === "owner" ? "bg-primary" : "bg-info"
+                      }`}
+                    />
                     <h2 className="truncate font-display text-[15px] font-semibold text-foreground">
                       {project.name}
                     </h2>
                   </div>
-                  <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                    Projeto
-                  </span>
+                  <ProjectOwnershipBadge project={project} />
                 </div>
 
                 <p className="line-clamp-3 text-[13px] leading-6 text-muted-foreground">
                   {project.description || "Sem descrição cadastrada."}
                 </p>
 
-                <div className="mt-auto flex items-center gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
-                  <CalendarClock className="size-3.5" aria-hidden="true" />
-                  Criado em {formatProjectDate(project.createdAt)}
+                <div className="mt-auto flex flex-col gap-3 border-t border-border pt-3">
+                  <OwnerLabel project={project} />
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>{getAccessLabel(project)}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <CalendarClock className="size-3.5" aria-hidden="true" />
+                      {formatProjectDate(project.createdAt)}
+                    </span>
+                  </div>
                 </div>
               </Link>
             ))}
           </section>
         ) : (
           <section className="surface-panel overflow-hidden" aria-label="Lista de projetos">
-            <div className="hidden grid-cols-[minmax(0,1fr)_auto] gap-4 border-b border-border px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
+            <div className="hidden grid-cols-[minmax(0,1fr)_auto_auto] gap-5 border-b border-border px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:grid">
               <span>Projeto</span>
+              <span>Propriedade</span>
               <span>Criado em</span>
             </div>
 
             <ul className="divide-y divide-border">
-              {filteredProjects.map((project) => (
+              {visibleProjects.map((project) => (
                 <li key={project.id}>
                   <Link
                     href={`/projects/${project.id}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:gap-5"
                   >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="size-2.5 shrink-0 rounded-full bg-primary" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {project.name}
-                      </p>
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {project.description || "Sem descrição cadastrada."}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className={`size-2.5 shrink-0 rounded-full ${
+                          project.myRole === "owner" ? "bg-primary" : "bg-info"
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {project.name}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {project.description || "Sem descrição cadastrada."}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                    <div className="hidden lg:block">
+                      <OwnerLabel project={project} />
+                    </div>
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {formatProjectDate(project.createdAt)}
                     </span>

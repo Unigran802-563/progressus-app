@@ -15,12 +15,13 @@ import {
   Plus,
   ShieldCheck,
   TriangleAlert,
-  UsersRound,
+  UserPlus,
   X,
 } from "lucide-react";
 
 import EditProjectDialog from "@/components/projects/EditProjectDialog";
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
+import ShareProjectDialog from "@/components/projects/ShareProjectDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, Panel } from "@/components/ui/progressus-ui";
 import {
@@ -28,12 +29,14 @@ import {
   createProject,
   getProject,
   getProjectMember,
+  listProjectParticipants,
   updateProject,
 } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import type {
   CreateProjectData,
   Project,
+  ProjectParticipant,
   ProjectRole,
   UpdateProjectData,
 } from "@/types";
@@ -61,9 +64,12 @@ export default function ProjectDetailPage() {
   const [user, setUser] = useState<User | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
+  const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const [isParticipantsLoading, setIsParticipantsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -73,9 +79,10 @@ export default function ProjectDetailPage() {
     try {
       setPageError("");
 
-      const [projectData, memberData] = await Promise.all([
+      const [projectData, memberData, participantsData] = await Promise.all([
         getProject(projectId),
         getProjectMember(projectId, currentUserId),
+        listProjectParticipants(projectId),
       ]);
 
       if (!projectData) {
@@ -86,6 +93,7 @@ export default function ProjectDetailPage() {
 
       setProject(projectData);
       setProjectRole(memberData?.role ?? null);
+      setParticipants(participantsData);
     } catch (error) {
       setPageError(
         error instanceof Error
@@ -94,6 +102,7 @@ export default function ProjectDetailPage() {
       );
     } finally {
       setIsPageLoading(false);
+      setIsParticipantsLoading(false);
     }
   }, [projectId]);
 
@@ -253,6 +262,14 @@ export default function ProjectDetailPage() {
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => setIsShareDialogOpen(true)}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                      <UserPlus className="size-4" aria-hidden="true" />
+                      Compartilhar
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setIsEditDialogOpen(true)}
                       className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                     >
@@ -312,12 +329,56 @@ export default function ProjectDetailPage() {
                 />
               </Panel>
 
-              <Panel title="Participantes" bodyClassName="p-0">
-                <EmptyState
-                  icon={<UsersRound className="size-5" aria-hidden="true" />}
-                  title="Compartilhamento em breve"
-                  description="Os participantes e os convites seguros serão configurados na próxima etapa."
-                />
+              <Panel title={`Participantes (${participants.length})`} bodyClassName="p-0">
+                {isParticipantsLoading ? (
+                  <div className="flex min-h-36 items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+                    Carregando participantes...
+                  </div>
+                ) : participants.length > 0 ? (
+                  <ul className="divide-y divide-border">
+                    {participants.map((participant) => (
+                      <li
+                        key={participant.userId}
+                        className="flex items-center gap-3 px-5 py-3.5"
+                      >
+                        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary ring-1 ring-primary/25">
+                          {participant.name.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {participant.name}
+                            {participant.userId === user?.id && (
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                (você)
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {participant.email}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                            participant.role === "owner"
+                              ? "bg-primary/15 text-primary"
+                              : participant.role === "member"
+                                ? "bg-info/15 text-info"
+                                : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {getRoleLabel(participant.role)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState
+                    icon={<UserPlus className="size-5" aria-hidden="true" />}
+                    title="Nenhum participante encontrado"
+                    description="Use o botão Compartilhar para convidar alguém."
+                  />
+                )}
               </Panel>
 
               <Panel title="Arquivos" bodyClassName="p-0">
@@ -339,6 +400,12 @@ export default function ProjectDetailPage() {
         onSave={handleSaveProject}
       />
 
+      <ShareProjectDialog
+        open={isShareDialogOpen}
+        project={project}
+        onClose={() => setIsShareDialogOpen(false)}
+      />
+
       <NewProjectDialog
         open={isNewProjectDialogOpen}
         onClose={() => setIsNewProjectDialogOpen(false)}
@@ -347,7 +414,7 @@ export default function ProjectDetailPage() {
 
       {isArchiveDialogOpen && project && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
           role="presentation"
         >
           <button
@@ -357,7 +424,7 @@ export default function ProjectDetailPage() {
             onClick={isArchiving ? undefined : () => setIsArchiveDialogOpen(false)}
           />
           <section
-            className="relative z-10 w-[calc(100vw-2rem)] max-w-[28rem] rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
+            className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="archive-project-title"

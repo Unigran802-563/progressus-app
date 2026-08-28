@@ -1,8 +1,12 @@
 import { supabase } from '@/lib/supabase';
 import type {
+  AccessibleProject,
   CreateProjectData,
+  InviteRole,
   Project,
+  ProjectInvite,
   ProjectMember,
+  ProjectParticipant,
   UpdateProjectData,
 } from '@/types';
 
@@ -14,10 +18,29 @@ type ProjectRow = {
   arquivado_em: string | null;
 };
 
+type AccessibleProjectRow = ProjectRow & {
+  meu_papel: AccessibleProject['myRole'];
+  id_proprietario: string;
+  nome_proprietario: string;
+};
+
 type ProjectMemberRow = {
   id_projeto: string;
   id_usuario: string;
   papel: ProjectMember['role'];
+};
+
+type ProjectParticipantRow = {
+  id_usuario: string;
+  nome: string;
+  email: string;
+  papel: ProjectParticipant['role'];
+};
+
+type ProjectInviteRow = {
+  token: string;
+  expira_em: string;
+  papel: InviteRole;
 };
 
 type ListProjectsOptions = {
@@ -34,6 +57,17 @@ function mapProject(row: ProjectRow): Project {
   };
 }
 
+function mapAccessibleProject(row: AccessibleProjectRow): AccessibleProject {
+  return {
+    ...mapProject(row),
+    myRole: row.meu_papel,
+    owner: {
+      id: row.id_proprietario,
+      name: row.nome_proprietario,
+    },
+  };
+}
+
 function mapProjectMember(row: ProjectMemberRow): ProjectMember {
   return {
     projectId: row.id_projeto,
@@ -42,26 +76,39 @@ function mapProjectMember(row: ProjectMemberRow): ProjectMember {
   };
 }
 
-export async function listProjects(
+function mapProjectParticipant(row: ProjectParticipantRow): ProjectParticipant {
+  return {
+    userId: row.id_usuario,
+    name: row.nome,
+    email: row.email,
+    role: row.papel,
+  };
+}
+
+export async function listAccessibleProjects(
   options: ListProjectsOptions = {},
-): Promise<Project[]> {
+): Promise<AccessibleProject[]> {
   const { includeArchived = false } = options;
 
-  let query = supabase
-    .from('projeto')
-    .select('id_projeto, nome, descricao, created_at, arquivado_em');
-
-  if (!includeArchived) {
-    query = query.is('arquivado_em', null);
-  }
-
-  const { data, error } = await query.order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('list_accessible_projects', {
+    p_incluir_arquivados: includeArchived,
+  });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as ProjectRow[]).map(mapProject);
+  return ((data ?? []) as AccessibleProjectRow[]).map(mapAccessibleProject);
+}
+
+export async function listProjects(
+  options: ListProjectsOptions = {},
+): Promise<Project[]> {
+  const projects = await listAccessibleProjects(options);
+
+  return projects.map(
+    ({ myRole: _myRole, owner: _owner, ...project }) => project,
+  );
 }
 
 export async function getProject(projectId: string): Promise<Project | null> {
@@ -94,6 +141,20 @@ export async function getProjectMember(
   }
 
   return data ? mapProjectMember(data as ProjectMemberRow) : null;
+}
+
+export async function listProjectParticipants(
+  projectId: string,
+): Promise<ProjectParticipant[]> {
+  const { data, error } = await supabase.rpc('list_project_members', {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as ProjectParticipantRow[]).map(mapProjectParticipant);
 }
 
 export async function createProject(
@@ -166,4 +227,42 @@ export async function archiveProject(projectId: string): Promise<Project> {
   }
 
   return mapProject(data as ProjectRow);
+}
+
+export async function createProjectInvite(
+  projectId: string,
+  role: InviteRole,
+): Promise<ProjectInvite> {
+  const { data, error } = await supabase.rpc('create_project_invite', {
+    p_project_id: projectId,
+    p_papel: role,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const invite = (data as ProjectInviteRow[] | null)?.[0];
+
+  if (!invite) {
+    throw new Error('Não foi possível gerar o convite.');
+  }
+
+  return {
+    token: invite.token,
+    expiresAt: invite.expira_em,
+    role: invite.papel,
+  };
+}
+
+export async function acceptProjectInvite(token: string): Promise<string> {
+  const { data, error } = await supabase.rpc('accept_project_invite', {
+    p_token: token.trim(),
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as string;
 }

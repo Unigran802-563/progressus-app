@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, LogIn, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import type { LoginFormData } from "@/types";
@@ -44,7 +44,13 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (response.success) {
-      router.push("/");
+      const nextPath = new URLSearchParams(window.location.search).get("next");
+      const destination =
+        nextPath?.startsWith("/") && !nextPath.startsWith("//")
+          ? nextPath
+          : "/";
+
+      router.push(destination);
     }
   }
 
