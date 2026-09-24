@@ -1,5 +1,5 @@
 "use client";
-
+import ProjectTasksPanel from "@/components/projects/ProjectTasksPanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -12,7 +12,6 @@ import {
   FolderKanban,
   Loader2,
   PencilLine,
-  Plus,
   ShieldCheck,
   TriangleAlert,
   UserPlus,
@@ -75,36 +74,39 @@ export default function ProjectDetailPage() {
   const [isArchiving, setIsArchiving] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const loadProject = useCallback(async (currentUserId: string) => {
-    try {
-      setPageError("");
+  const loadProject = useCallback(
+    async (currentUserId: string) => {
+      try {
+        setPageError("");
 
-      const [projectData, memberData, participantsData] = await Promise.all([
-        getProject(projectId),
-        getProjectMember(projectId, currentUserId),
-        listProjectParticipants(projectId),
-      ]);
+        const [projectData, memberData, participantsData] = await Promise.all([
+          getProject(projectId),
+          getProjectMember(projectId, currentUserId),
+          listProjectParticipants(projectId),
+        ]);
 
-      if (!projectData) {
-        setProject(null);
-        setPageError("Este projeto não existe ou você não tem acesso a ele.");
-        return;
+        if (!projectData) {
+          setProject(null);
+          setPageError("Este projeto não existe ou você não tem acesso a ele.");
+          return;
+        }
+
+        setProject(projectData);
+        setProjectRole(memberData?.role ?? null);
+        setParticipants(participantsData);
+      } catch (error) {
+        setPageError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o projeto.",
+        );
+      } finally {
+        setIsPageLoading(false);
+        setIsParticipantsLoading(false);
       }
-
-      setProject(projectData);
-      setProjectRole(memberData?.role ?? null);
-      setParticipants(participantsData);
-    } catch (error) {
-      setPageError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar o projeto.",
-      );
-    } finally {
-      setIsPageLoading(false);
-      setIsParticipantsLoading(false);
-    }
-  }, [projectId]);
+    },
+    [projectId],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -192,7 +194,10 @@ export default function ProjectDetailPage() {
   if (isPageLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-6 animate-spin text-primary" aria-label="Carregando" />
+        <Loader2
+          className="size-6 animate-spin text-primary"
+          aria-label="Carregando"
+        />
       </main>
     );
   }
@@ -218,7 +223,9 @@ export default function ProjectDetailPage() {
             <EmptyState
               icon={<TriangleAlert className="size-6" aria-hidden="true" />}
               title="Projeto indisponível"
-              description={pageError || "Não foi possível localizar este projeto."}
+              description={
+                pageError || "Não foi possível localizar este projeto."
+              }
               action={
                 <Link
                   href="/projects"
@@ -237,11 +244,13 @@ export default function ProjectDetailPage() {
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
                     <FolderKanban className="size-5" aria-hidden="true" />
                   </span>
+
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h1 className="font-display text-2xl font-bold text-foreground sm:text-3xl">
                         {project.name}
                       </h1>
+
                       <span
                         className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
                           project.archivedAt
@@ -252,40 +261,48 @@ export default function ProjectDetailPage() {
                         {project.archivedAt ? "Arquivado" : "Ativo"}
                       </span>
                     </div>
+
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                      {project.description || "Este projeto ainda não possui uma descrição."}
+                      {project.description ||
+                        "Este projeto ainda não possui uma descrição."}
                     </p>
                   </div>
                 </div>
 
-                {isOwner && !project.archivedAt && (
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsShareDialogOpen(true)}
-                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                      <UserPlus className="size-4" aria-hidden="true" />
-                      Compartilhar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditDialogOpen(true)}
-                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                      <PencilLine className="size-4" aria-hidden="true" />
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsArchiveDialogOpen(true)}
-                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 text-sm font-medium text-warning transition-colors hover:bg-warning/15"
-                    >
-                      <Archive className="size-4" aria-hidden="true" />
-                      Arquivar
-                    </button>
-                  </div>
-                )}
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  
+
+                  {isOwner && !project.archivedAt && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsShareDialogOpen(true)}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <UserPlus className="size-4" aria-hidden="true" />
+                        Compartilhar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsEditDialogOpen(true)}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <PencilLine className="size-4" aria-hidden="true" />
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsArchiveDialogOpen(true)}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 text-sm font-medium text-warning transition-colors hover:bg-warning/15"
+                      >
+                        <Archive className="size-4" aria-hidden="true" />
+                        Arquivar
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -293,8 +310,12 @@ export default function ProjectDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Criado em
                   </p>
+
                   <p className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <CalendarClock className="size-4 text-primary" aria-hidden="true" />
+                    <CalendarClock
+                      className="size-4 text-primary"
+                      aria-hidden="true"
+                    />
                     {formatProjectDate(project.createdAt)}
                   </p>
                 </div>
@@ -303,8 +324,12 @@ export default function ProjectDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Seu acesso
                   </p>
+
                   <p className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+                    <ShieldCheck
+                      className="size-4 text-primary"
+                      aria-hidden="true"
+                    />
                     {getRoleLabel(projectRole)}
                   </p>
                 </div>
@@ -313,26 +338,34 @@ export default function ProjectDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Situação
                   </p>
+
                   <p className="mt-2 text-sm font-medium text-foreground">
-                    {project.archivedAt ? "Projeto arquivado" : "Projeto em andamento"}
+                    {project.archivedAt
+                      ? "Projeto arquivado"
+                      : "Projeto em andamento"}
                   </p>
                 </div>
               </div>
             </section>
 
-            <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <section className="grid grid-cols-1 gap-4">
               <Panel title="Tarefas" bodyClassName="p-0">
-                <EmptyState
-                  icon={<FolderKanban className="size-5" aria-hidden="true" />}
-                  title="Nenhuma tarefa cadastrada"
-                  description="O quadro de tarefas será adicionado na próxima etapa."
+                <ProjectTasksPanel
+                  projectId={project.id}
+                  disabled={Boolean(project.archivedAt)}
                 />
               </Panel>
 
-              <Panel title={`Participantes (${participants.length})`} bodyClassName="p-0">
+              <Panel
+                title={`Participantes (${participants.length})`}
+                bodyClassName="p-0"
+              >
                 {isParticipantsLoading ? (
                   <div className="flex min-h-36 items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+                    <Loader2
+                      className="size-4 animate-spin text-primary"
+                      aria-hidden="true"
+                    />
                     Carregando participantes...
                   </div>
                 ) : participants.length > 0 ? (
@@ -345,19 +378,23 @@ export default function ProjectDetailPage() {
                         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary ring-1 ring-primary/25">
                           {participant.name.charAt(0).toUpperCase()}
                         </span>
+
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">
                             {participant.name}
+
                             {participant.userId === user?.id && (
                               <span className="ml-1 text-xs font-normal text-muted-foreground">
                                 (você)
                               </span>
                             )}
                           </p>
+
                           <p className="truncate text-[11px] text-muted-foreground">
                             {participant.email}
                           </p>
                         </div>
+
                         <span
                           className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
                             participant.role === "owner"
@@ -421,8 +458,11 @@ export default function ProjectDetailPage() {
             type="button"
             aria-label="Cancelar arquivamento"
             className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm"
-            onClick={isArchiving ? undefined : () => setIsArchiveDialogOpen(false)}
+            onClick={
+              isArchiving ? undefined : () => setIsArchiveDialogOpen(false)
+            }
           />
+
           <section
             className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
             role="dialog"
@@ -434,6 +474,7 @@ export default function ProjectDetailPage() {
                 <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warning/10 text-warning">
                   <Archive className="size-5" aria-hidden="true" />
                 </span>
+
                 <div>
                   <h2
                     id="archive-project-title"
@@ -441,11 +482,15 @@ export default function ProjectDetailPage() {
                   >
                     Arquivar projeto?
                   </h2>
+
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    O projeto <strong className="text-foreground">{project.name}</strong> sairá da lista ativa. Seus dados não serão apagados.
+                    O projeto{" "}
+                    <strong className="text-foreground">{project.name}</strong>{" "}
+                    sairá da lista ativa. Seus dados não serão apagados.
                   </p>
                 </div>
               </div>
+
               <button
                 type="button"
                 onClick={() => setIsArchiveDialogOpen(false)}
@@ -466,6 +511,7 @@ export default function ProjectDetailPage() {
               >
                 Cancelar
               </button>
+
               <button
                 type="button"
                 onClick={() => void handleArchiveProject()}
@@ -475,6 +521,7 @@ export default function ProjectDetailPage() {
                 {isArchiving && (
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                 )}
+
                 {isArchiving ? "Arquivando..." : "Arquivar projeto"}
               </button>
             </div>

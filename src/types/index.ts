@@ -76,3 +76,37 @@ export type ProjectInvite = {
   expiresAt: string;
   role: InviteRole;
 };
+export type TarefaStatus = {
+  id_status: string;
+  id_projeto: string;
+  nome: string;
+  ordem: number;
+  data_criacao?: string;
+};
+
+export type TarefaPrioridade = 'Baixa' | 'Media' | 'Alta';
+
+export type Tarefa = {
+  id_tarefa: string;
+  id_projeto: string;
+  id_status: string | null;
+  nome: string;
+  descricao: string | null;
+  prioridade: TarefaPrioridade | string | null;
+  created_at: string;
+};
+
+export type CriarTarefaData = {
+  id_projeto: string;
+  id_status: string;
+  nome: string;
+  descricao?: string;
+  prioridade?: TarefaPrioridade;
+};
+
+export type AtualizarTarefaData = {
+  id_status?: string;
+  nome?: string;
+  descricao?: string;
+  prioridade?: TarefaPrioridade;
+};
