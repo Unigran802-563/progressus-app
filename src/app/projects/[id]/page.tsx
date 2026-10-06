@@ -11,6 +11,7 @@ import {
   FileText,
   FolderKanban,
   Loader2,
+  MessageSquare,
   PencilLine,
   ShieldCheck,
   TriangleAlert,
@@ -270,7 +271,13 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  
+                  <Link
+                    href={`/chat/${project.id}`}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                  >
+                    <MessageSquare className="size-4" aria-hidden="true" />
+                    Chat
+                  </Link>
 
                   {isOwner && !project.archivedAt && (
                     <>
