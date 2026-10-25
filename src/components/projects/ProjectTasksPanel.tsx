@@ -7,6 +7,7 @@ import {
   List,
   Loader2,
   Plus,
+  Sparkles,
   X,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ import {
   listarStatus,
   listarTarefas,
 } from "@/lib/tasks";
+import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
 import type { Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 type ProjectTasksPanelProps = {
@@ -41,8 +43,15 @@ export default function ProjectTasksPanel({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [prioridade, setPrioridade] = useState<TarefaPrioridade>("Media");
+  const [prioridade, setPrioridade] =
+    useState<TarefaPrioridade>("Media");
   const [statusInicial, setStatusInicial] = useState("");
+
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] =
+    useState(false);
+  const [suggestions, setSuggestions] = useState<SuggestedTask[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -125,12 +134,18 @@ export default function ProjectTasksPanel({
   }
 
   function handlePriorityChange(value: string) {
-    if (value === "Baixa" || value === "Media" || value === "Alta") {
+    if (
+      value === "Baixa" ||
+      value === "Media" ||
+      value === "Alta"
+    ) {
       setPrioridade(value);
     }
   }
 
-  async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
+  async function handleCreateTask(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     if (!nome.trim()) {
@@ -155,25 +170,36 @@ export default function ProjectTasksPanel({
         prioridade,
       });
 
-      setTarefas((currentTasks) => [novaTarefa, ...currentTasks]);
+      setTarefas((currentTasks) => [
+        novaTarefa,
+        ...currentTasks,
+      ]);
 
       resetForm();
       setIsModalOpen(false);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Não foi possível criar a tarefa.",
+        err instanceof Error
+          ? err.message
+          : "Não foi possível criar a tarefa.",
       );
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleStatusChange(idTarefa: string, novoStatus: string) {
+  async function handleStatusChange(
+    idTarefa: string,
+    novoStatus: string,
+  ) {
     try {
       setUpdatingTaskId(idTarefa);
       setError("");
 
-      const tarefaAtualizada = await alterarStatusTarefa(idTarefa, novoStatus);
+      const tarefaAtualizada = await alterarStatusTarefa(
+        idTarefa,
+        novoStatus,
+      );
 
       setTarefas((currentTasks) =>
         currentTasks.map((tarefa) =>
@@ -193,9 +219,31 @@ export default function ProjectTasksPanel({
     }
   }
 
+  async function handleSuggestTasks() {
+    try {
+      setSuggesting(true);
+      setAiError("");
+      setSuggestions([]);
+
+      const result = await sugerirTarefasComIA(projectId);
+
+      setSuggestions(result);
+      setIsSuggestionModalOpen(true);
+    } catch (err) {
+      setAiError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível gerar sugestões.",
+      );
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
   function getStatusName(idStatus: string | null) {
     return (
-      status.find((item) => item.id_status === idStatus)?.nome || "Sem status"
+      status.find((item) => item.id_status === idStatus)?.nome ||
+      "Sem status"
     );
   }
 
@@ -240,6 +288,12 @@ export default function ProjectTasksPanel({
         </div>
       )}
 
+      {aiError && (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {aiError}
+        </div>
+      )}
+
       <div className="mb-5 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-base font-semibold text-foreground">
@@ -248,11 +302,34 @@ export default function ProjectTasksPanel({
 
           <p className="mt-1 text-sm text-muted-foreground">
             {tarefas.length}{" "}
-            {tarefas.length === 1 ? "tarefa cadastrada" : "tarefas cadastradas"}
+            {tarefas.length === 1
+              ? "tarefa cadastrada"
+              : "tarefas cadastradas"}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleSuggestTasks()}
+            disabled={disabled || suggesting}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {suggesting ? (
+              <Loader2
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Sparkles
+                className="size-4"
+                aria-hidden="true"
+              />
+            )}
+
+            {suggesting ? "Analisando..." : "Sugerir com IA"}
+          </button>
+
           <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
             <button
               type="button"
@@ -263,7 +340,10 @@ export default function ProjectTasksPanel({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <KanbanSquare className="size-4" aria-hidden="true" />
+              <KanbanSquare
+                className="size-4"
+                aria-hidden="true"
+              />
               Kanban
             </button>
 
@@ -276,7 +356,10 @@ export default function ProjectTasksPanel({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <List className="size-4" aria-hidden="true" />
+              <List
+                className="size-4"
+                aria-hidden="true"
+              />
               Lista
             </button>
           </div>
@@ -287,7 +370,10 @@ export default function ProjectTasksPanel({
             disabled={disabled}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus className="size-4" aria-hidden="true" />
+            <Plus
+              className="size-4"
+              aria-hidden="true"
+            />
             Nova tarefa
           </button>
         </div>
@@ -347,7 +433,10 @@ export default function ProjectTasksPanel({
                       <select
                         id={`status-kanban-${tarefa.id_tarefa}`}
                         value={tarefa.id_status ?? ""}
-                        disabled={updatingTaskId === tarefa.id_tarefa}
+                        disabled={
+                          disabled ||
+                          updatingTaskId === tarefa.id_tarefa
+                        }
                         onChange={(event) =>
                           void handleStatusChange(
                             tarefa.id_tarefa,
@@ -440,7 +529,10 @@ export default function ProjectTasksPanel({
                     <td className="px-4 py-4">
                       <select
                         value={tarefa.id_status ?? ""}
-                        disabled={updatingTaskId === tarefa.id_tarefa}
+                        disabled={
+                          disabled ||
+                          updatingTaskId === tarefa.id_tarefa
+                        }
                         onChange={(event) =>
                           void handleStatusChange(
                             tarefa.id_tarefa,
@@ -465,6 +557,105 @@ export default function ProjectTasksPanel({
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {isSuggestionModalOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsSuggestionModalOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-suggestions-title"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles
+                    className="size-5 text-primary"
+                    aria-hidden="true"
+                  />
+
+                  <h2
+                    id="ai-suggestions-title"
+                    className="text-lg font-semibold text-foreground"
+                  >
+                    Sugestões da IA
+                  </h2>
+                </div>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Revise as sugestões antes de adicioná-las ao projeto.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSuggestionModalOpen(false)}
+                className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Fechar sugestões"
+              >
+                <X
+                  className="size-5"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+
+            {suggestions.length === 0 ? (
+              <div className="mt-6 rounded-xl border border-dashed border-border px-4 py-8 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Nenhuma sugestão encontrada
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A IA não identificou novas tarefas com base nos dados atuais.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-3">
+                {suggestions.map((suggestion, index) => (
+                  <article
+                    key={`${suggestion.nome}-${index}`}
+                    className="rounded-xl border border-border bg-background/60 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {suggestion.nome}
+                      </h3>
+
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">
+                        {suggestion.prioridade}
+                      </span>
+                    </div>
+
+                    {suggestion.descricao && (
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {suggestion.descricao}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSuggestionModalOpen(false)}
+                className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                Fechar
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -504,7 +695,10 @@ export default function ProjectTasksPanel({
                 className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                 aria-label="Fechar"
               >
-                <X className="size-5" aria-hidden="true" />
+                <X
+                  className="size-5"
+                  aria-hidden="true"
+                />
               </button>
             </div>
 
@@ -514,7 +708,10 @@ export default function ProjectTasksPanel({
               </div>
             )}
 
-            <form onSubmit={handleCreateTask} className="mt-5 space-y-4">
+            <form
+              onSubmit={handleCreateTask}
+              className="mt-5 space-y-4"
+            >
               <div>
                 <label
                   htmlFor="project-task-name"
@@ -586,11 +783,16 @@ export default function ProjectTasksPanel({
                   <select
                     id="project-task-status"
                     value={statusInicial}
-                    onChange={(event) => setStatusInicial(event.target.value)}
+                    onChange={(event) =>
+                      setStatusInicial(event.target.value)
+                    }
                     className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary"
                   >
                     {status.map((column) => (
-                      <option key={column.id_status} value={column.id_status}>
+                      <option
+                        key={column.id_status}
+                        value={column.id_status}
+                      >
                         {column.nome}
                       </option>
                     ))}
