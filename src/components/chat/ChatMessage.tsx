@@ -3,15 +3,75 @@
 import { useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
-import type { ChatMessage as ChatMessageType } from "@/types/chat";
+import type { ChatMessage as ChatMessageType, ChatFile } from "@/types/chat";
 
 type ChatMessageProps = {
   message: ChatMessageType;
   isOwn: boolean;
   senderName: string;
+  onOpenFile: (file: ChatFile) => void;
 };
 
-export function ChatMessage({ message, isOwn, senderName }: ChatMessageProps) {
+function renderMessageContent(
+  content: string,
+  mentions: ChatMessageType["menções"],
+  isOwn: boolean,
+) {
+  const validMentions = (mentions ?? [])
+    .filter(
+      (mention) =>
+        mention.inicio !== null &&
+        mention.fim !== null &&
+        mention.inicio >= 0 &&
+        mention.fim > mention.inicio &&
+        mention.fim <= content.length &&
+        content.slice(mention.inicio, mention.fim) === mention.texto,
+    )
+    .sort((a, b) => a.inicio! - b.inicio!);
+
+  const parts = [];
+  let currentPosition = 0;
+
+  validMentions.forEach((mention, index) => {
+    if (mention.inicio! < currentPosition) return;
+
+    if (mention.inicio! > currentPosition) {
+      parts.push(
+        <span key={`text-${index}`}>
+          {content.slice(currentPosition, mention.inicio!)}
+        </span>,
+      );
+    }
+
+    parts.push(
+      <span
+        key={`mention-${mention.id_mencao}`}
+        className={`rounded px-1 font-semibold ${
+          isOwn
+            ? "bg-green-400/20 text-green-200"
+            : "bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300"
+        }`}
+      >
+        {content.slice(mention.inicio!, mention.fim!)}
+      </span>,
+    );
+
+    currentPosition = mention.fim!;
+  });
+
+  if (currentPosition < content.length) {
+    parts.push(<span key="text-final">{content.slice(currentPosition)}</span>);
+  }
+
+  return <>{parts}</>;
+}
+
+export function ChatMessage({
+  message,
+  isOwn,
+  senderName,
+  onOpenFile,
+}: ChatMessageProps) {
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -62,7 +122,7 @@ export function ChatMessage({ message, isOwn, senderName }: ChatMessageProps) {
 
         {message.conteudo && (
           <p className="whitespace-pre-wrap break-words text-sm">
-            {message.conteudo}
+            {renderMessageContent(message.conteudo, message.menções, isOwn)}
           </p>
         )}
 
@@ -75,29 +135,27 @@ export function ChatMessage({ message, isOwn, senderName }: ChatMessageProps) {
 
               if (isImage && fileUrl) {
                 return (
-                  <a
+                  <button
                     key={file.id_arquivo}
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block overflow-hidden rounded-lg"
+                    type="button"
+                    onClick={() => onOpenFile(file)}
+                    className="block overflow-hidden rounded-lg text-left"
                   >
                     <img
                       src={fileUrl}
                       alt={file.nome}
                       className="max-h-80 max-w-full rounded-lg object-contain"
                     />
-                  </a>
+                  </button>
                 );
               }
 
               return (
-                <a
+                <button
                   key={file.id_arquivo}
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition hover:opacity-80 ${
+                  type="button"
+                  onClick={() => onOpenFile(file)}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition hover:opacity-80 ${
                     isOwn ? "border-primary-foreground/20" : "border-border"
                   }`}
                 >
@@ -118,7 +176,7 @@ export function ChatMessage({ message, isOwn, senderName }: ChatMessageProps) {
                         : "Arquivo"}
                     </p>
                   </div>
-                </a>
+                </button>
               );
             })}
           </div>

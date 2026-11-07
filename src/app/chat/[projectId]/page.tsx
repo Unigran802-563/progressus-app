@@ -261,7 +261,13 @@ export default function ChatPage({ params }: ChatPageProps) {
               </div>
             )}
 
-            <ChatInput onSend={sendMessage} isSending={isSending} />
+            <ChatInput
+              onSend={sendMessage}
+              isSending={isSending}
+              participants={participants}
+              isGroup={true}
+              currentUserId={user?.id ?? null}
+            />
           </section>
         </div>
       </main>

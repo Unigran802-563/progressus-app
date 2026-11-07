@@ -50,7 +50,7 @@ const navigation = [
     href: "/calendar",
     available: false,
   },
-  { label: "Chat", icon: MessageSquare, href: "/chat", available: false },
+  { label: "Chat", icon: MessageSquare, href: "/chat", available: true },
   { label: "Inteligência", icon: Sparkles, href: "/ai", available: false },
   {
     label: "Notificações",
