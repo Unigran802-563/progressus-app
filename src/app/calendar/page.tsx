@@ -59,9 +59,9 @@ export default function CalendarPage() {
   const userName = String(user?.user_metadata?.nome || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário');
   const userInitial = userName.charAt(0).toUpperCase() || 'U';
 
-  const load = useCallback(async (userId: string) => {
+  const load = useCallback(async (userId: string, showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError('');
       const [taskData, projectData] = await Promise.all([listarMinhasTarefas(userId), listAccessibleProjects()]);
       setTasks(taskData.filter((task) => task.prazo));
@@ -69,7 +69,7 @@ export default function CalendarPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível carregar o calendário.');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
@@ -86,6 +86,15 @@ export default function CalendarPage() {
     });
     return () => { active = false; };
   }, [load, router]);
+
+  useEffect(() => {
+    function refreshCalendar() {
+      if (user) void load(user.id, false);
+    }
+
+    window.addEventListener('progressus:tasks-changed', refreshCalendar);
+    return () => window.removeEventListener('progressus:tasks-changed', refreshCalendar);
+  }, [load, user]);
 
   useEffect(() => {
     if (!projectId) {
@@ -140,8 +149,8 @@ export default function CalendarPage() {
 
   async function changeTaskDate(task: MinhaTarefa, value: string) {
     try {
-      const updated = await atualizarTarefa(task.id_tarefa, { prazo: value || null });
-      setTasks((current) => current.map((item) => item.id_tarefa === task.id_tarefa ? { ...item, ...updated } : item).filter((item) => item.prazo));
+      await atualizarTarefa(task.id_tarefa, { prazo: value || null });
+      if (user) await load(user.id, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível alterar o prazo.');
     }
@@ -150,7 +159,10 @@ export default function CalendarPage() {
   function openCreate(date: string) {
     setSelectedDate(date);
     setProjectId('');
+    setStatusId('');
     setName('');
+    setPriority('Media');
+    setError('');
     setModalOpen(true);
   }
 
@@ -159,10 +171,8 @@ export default function CalendarPage() {
     if (!user || !projectId || !statusId || !name.trim()) return;
     try {
       setSaving(true);
-      const created = await criarTarefa({ id_projeto: projectId, id_status: statusId, id_usuario: user.id, nome: name, prioridade: priority, prazo: selectedDate });
-      const project = projects.find((item) => item.id === projectId);
-      const status = statuses.find((item) => item.id_status === statusId);
-      setTasks((current) => [{ ...created, projeto_nome: project?.name ?? 'Projeto', status_nome: status?.nome ?? 'Status' }, ...current]);
+      await criarTarefa({ id_projeto: projectId, id_status: statusId, id_usuario: user.id, nome: name, prioridade: priority, prazo: selectedDate });
+      await load(user.id, false);
       setModalOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível criar a tarefa.');
