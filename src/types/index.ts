@@ -29,10 +29,14 @@ export type AuthResponse = {
 };
 export type ProjectRole = 'owner' | 'member' | 'viewer';
 
+export type ProjectStatus = 'planejamento' | 'em_andamento' | 'concluido';
+
 export type Project = {
   id: string;
   name: string;
   description: string | null;
+  projectStatus?: ProjectStatus;
+  dueDate?: string | null;
   createdAt: string;
   archivedAt: string | null;
 };
@@ -46,11 +50,15 @@ export type ProjectMember = {
 export type CreateProjectData = {
   name: string;
   description?: string;
+  projectStatus?: ProjectStatus;
+  dueDate?: string | null;
 };
 
 export type UpdateProjectData = {
   name?: string;
   description?: string | null;
+  projectStatus?: ProjectStatus;
+  dueDate?: string | null;
 };
 export type InviteRole = 'member' | 'viewer';
 
@@ -90,23 +98,29 @@ export type Tarefa = {
   id_tarefa: string;
   id_projeto: string;
   id_status: string | null;
+  id_usuario?: string | null;
   nome: string;
   descricao: string | null;
   prioridade: TarefaPrioridade | string | null;
+  prazo?: string | null;
   created_at: string;
 };
 
 export type CriarTarefaData = {
   id_projeto: string;
   id_status: string;
+  id_usuario?: string | null;
   nome: string;
   descricao?: string;
   prioridade?: TarefaPrioridade;
+  prazo?: string | null;
 };
 
 export type AtualizarTarefaData = {
   id_status?: string;
+  id_usuario?: string | null;
   nome?: string;
   descricao?: string;
   prioridade?: TarefaPrioridade;
+  prazo?: string | null;
 };
