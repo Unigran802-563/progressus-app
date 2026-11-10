@@ -48,7 +48,7 @@ const navigation = [
     label: "Calendário",
     icon: CalendarDays,
     href: "/calendar",
-    available: false,
+    available: true,
   },
   { label: "Chat", icon: MessageSquare, href: "/chat", available: true },
   { label: "Inteligência", icon: Sparkles, href: "/ai", available: false },
