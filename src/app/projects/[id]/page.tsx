@@ -476,7 +476,11 @@ export default function ProjectDetailPage() {
               )}
 
               {activeTab === "tasks" && (
-                <ProjectTasksPanel projectId={project.id} disabled={Boolean(project.archivedAt)} />
+                <ProjectTasksPanel
+                  projectId={project.id}
+                  disabled={Boolean(project.archivedAt)}
+                  listOnly
+                />
               )}
 
               {activeTab === "members" && (

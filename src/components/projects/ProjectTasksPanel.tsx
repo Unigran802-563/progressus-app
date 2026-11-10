@@ -23,6 +23,7 @@ import type { Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 type ProjectTasksPanelProps = {
   projectId: string;
   disabled?: boolean;
+  listOnly?: boolean;
 };
 
 type TasksView = "kanban" | "list";
@@ -30,10 +31,11 @@ type TasksView = "kanban" | "list";
 export default function ProjectTasksPanel({
   projectId,
   disabled = false,
+  listOnly = false,
 }: ProjectTasksPanelProps) {
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [status, setStatus] = useState<TarefaStatus[]>([]);
-  const [view, setView] = useState<TasksView>("kanban");
+  const [view, setView] = useState<TasksView>(listOnly ? "list" : "kanban");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -330,39 +332,35 @@ export default function ProjectTasksPanel({
             {suggesting ? "Analisando..." : "Sugerir com IA"}
           </button>
 
-          <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
-            <button
-              type="button"
-              onClick={() => setView("kanban")}
-              className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
-                view === "kanban"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <KanbanSquare
-                className="size-4"
-                aria-hidden="true"
-              />
-              Kanban
-            </button>
+          {!listOnly && (
+            <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => setView("kanban")}
+                className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
+                  view === "kanban"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <KanbanSquare className="size-4" aria-hidden="true" />
+                Kanban
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
-                view === "list"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <List
-                className="size-4"
-                aria-hidden="true"
-              />
-              Lista
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
+                  view === "list"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="size-4" aria-hidden="true" />
+                Lista
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
