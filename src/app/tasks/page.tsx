@@ -3,25 +3,43 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
-import { CheckCircle2, ListChecks, Loader2, Plus, TriangleAlert } from 'lucide-react';
+import { CalendarDays, CheckCircle2, KanbanSquare, List, Loader2, Plus, Search, TriangleAlert } from 'lucide-react';
 
 import AppShell from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui/progressus-ui';
-import { listarMinhasTarefas, listarStatus, criarTarefa, atualizarTarefa, type MinhaTarefa } from '@/lib/tasks';
+import { atualizarTarefa, criarTarefa, listarMinhasTarefas, listarStatus, type MinhaTarefa } from '@/lib/tasks';
 import { listAccessibleProjects } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 import type { AccessibleProject, TarefaPrioridade, TarefaStatus } from '@/types';
 
-type StatusFilter = 'todos' | 'pendentes' | 'concluidas';
-type DueFilter = 'todos' | 'atrasadas' | 'proximas' | 'sem_prazo';
+type TasksView = 'kanban' | 'list';
+type DueFilter = 'any' | '7' | '30';
+type ResponsibleFilter = 'mine' | 'any';
+
+const statusOrder = ['a fazer', 'em andamento', 'em revisão', 'concluído', 'concluída'];
 
 function isCompleted(task: MinhaTarefa) {
   return task.status_nome.toLocaleLowerCase('pt-BR').includes('concl');
 }
 
-function formatDueDate(date: string | null | undefined) {
-  if (!date) return 'Sem prazo';
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${date}T00:00:00`));
+function priorityTone(priority: string | null) {
+  const value = priority?.toLocaleLowerCase('pt-BR');
+  if (value === 'alta') return 'text-warning bg-warning/10';
+  if (value === 'baixa') return 'text-info bg-info/10';
+  return 'text-primary bg-primary/10';
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return 'Sem prazo';
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T00:00:00`));
+}
+
+function isWithinDays(date: string | null | undefined, days: number) {
+  if (!date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${date}T00:00:00`);
+  return due >= today && due.getTime() <= today.getTime() + days * 86400000;
 }
 
 export default function MyTasksPage() {
@@ -30,10 +48,13 @@ export default function MyTasksPage() {
   const [tasks, setTasks] = useState<MinhaTarefa[]>([]);
   const [projects, setProjects] = useState<AccessibleProject[]>([]);
   const [statuses, setStatuses] = useState<TarefaStatus[]>([]);
-  const [projectId, setProjectId] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
-  const [dueFilter, setDueFilter] = useState<DueFilter>('todos');
+  const [view, setView] = useState<TasksView>('kanban');
   const [search, setSearch] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [responsibleFilter, setResponsibleFilter] = useState<ResponsibleFilter>('mine');
+  const [dueFilter, setDueFilter] = useState<DueFilter>('any');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -92,31 +113,37 @@ export default function MyTasksPage() {
   }, [newProjectId]);
 
   const visibleTasks = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const normalized = search.trim().toLocaleLowerCase('pt-BR');
     return tasks.filter((task) => {
-      const completed = isCompleted(task);
-      if (statusFilter === 'pendentes' && completed) return false;
-      if (statusFilter === 'concluidas' && !completed) return false;
-      if (projectId && task.id_projeto !== projectId) return false;
-      if (normalized && !`${task.nome} ${task.projeto_nome} ${task.status_nome}`.toLocaleLowerCase('pt-BR').includes(normalized)) return false;
-      if (dueFilter === 'sem_prazo' && task.prazo) return false;
-      if (dueFilter === 'atrasadas' && (!task.prazo || completed || new Date(`${task.prazo}T00:00:00`) >= today)) return false;
-      if (dueFilter === 'proximas' && (!task.prazo || new Date(`${task.prazo}T00:00:00`) < today || new Date(`${task.prazo}T00:00:00`).getTime() > today.getTime() + 7 * 86400000)) return false;
-      return true;
+      const matchesSearch = !normalized || `${task.nome} ${task.projeto_nome} ${task.status_nome}`.toLocaleLowerCase('pt-BR').includes(normalized);
+      const matchesProject = !projectFilter || task.id_projeto === projectFilter;
+      const matchesStatus = !statusFilter || task.status_nome === statusFilter;
+      const matchesPriority = !priorityFilter || (task.prioridade || 'Media') === priorityFilter;
+      const matchesDue = dueFilter === 'any' || isWithinDays(task.prazo, Number(dueFilter));
+      const matchesResponsible = responsibleFilter === 'any' || task.id_usuario === user?.id;
+      return matchesSearch && matchesProject && matchesStatus && matchesPriority && matchesDue && matchesResponsible;
     });
-  }, [dueFilter, projectId, search, statusFilter, tasks]);
+  }, [dueFilter, priorityFilter, projectFilter, responsibleFilter, search, statusFilter, tasks, user?.id]);
+
+  const columns = useMemo(() => {
+    const names = Array.from(new Set(tasks.map((task) => task.status_nome).filter(Boolean)));
+    return names.sort((a, b) => {
+      const aIndex = statusOrder.indexOf(a.toLocaleLowerCase('pt-BR'));
+      const bIndex = statusOrder.indexOf(b.toLocaleLowerCase('pt-BR'));
+      return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex);
+    });
+  }, [tasks]);
 
   async function handleComplete(task: MinhaTarefa) {
-    const completedStatus = (await listarStatus(task.id_projeto)).find((item) => item.nome.toLocaleLowerCase('pt-BR').includes('concl'));
-    if (!completedStatus) {
-      setError('Não existe uma coluna de status concluído neste projeto.');
-      return;
-    }
     try {
-      const updated = await atualizarTarefa(task.id_tarefa, { id_status: completedStatus.id_status });
-      setTasks((current) => current.map((item) => item.id_tarefa === updated.id_tarefa ? { ...item, ...updated, status_nome: completedStatus.nome } : item));
+      const projectStatuses = await listarStatus(task.id_projeto);
+      const completed = projectStatuses.find((item) => item.nome.toLocaleLowerCase('pt-BR').includes('concl'));
+      if (!completed) {
+        setError('Não existe uma coluna de status concluído neste projeto.');
+        return;
+      }
+      const updated = await atualizarTarefa(task.id_tarefa, { id_status: completed.id_status });
+      setTasks((current) => current.map((item) => item.id_tarefa === updated.id_tarefa ? { ...item, ...updated, status_nome: completed.nome } : item));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível concluir a tarefa.');
     }
@@ -132,7 +159,7 @@ export default function MyTasksPage() {
       const status = statuses.find((item) => item.id_status === newStatusId);
       setTasks((current) => [{ ...created, projeto_nome: project?.name ?? 'Projeto', status_nome: status?.nome ?? 'Status' }, ...current]);
       setModalOpen(false);
-      setName(''); setDescription(''); setDueDate(''); setPriority('Media');
+      setName(''); setDescription(''); setDueDate(''); setPriority('Media'); setNewProjectId('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível criar a tarefa.');
     } finally {
@@ -140,22 +167,12 @@ export default function MyTasksPage() {
     }
   }
 
+  function taskCard(task: MinhaTarefa) {
+    const project = projects.find((item) => item.id === task.id_projeto);
+    return <article key={task.id_tarefa} className="rounded-2xl border border-border bg-surface p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"><button type="button" onClick={() => router.push(`/projects/${task.id_projeto}`)} className="block w-full text-left text-sm font-semibold leading-5 text-foreground hover:text-primary">{task.nome}</button><button type="button" onClick={() => router.push(`/projects/${task.id_projeto}`)} className="mt-2 flex items-center gap-2 text-left text-xs text-muted-foreground hover:text-primary"><span className="size-2 rounded-full bg-primary" />{project?.name ?? task.projeto_nome}</button>{task.descricao && <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{task.descricao}</p>}<div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${priorityTone(task.prioridade)}`}>{task.prioridade || 'Media'}</span><span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><CalendarDays className="size-3.5" />{formatDate(task.prazo)}</span><span className="grid size-7 place-items-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{userInitial}</span></div>{!isCompleted(task) && <button type="button" onClick={() => void handleComplete(task)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-success hover:text-success/80"><CheckCircle2 className="size-3.5" />Marcar como concluída</button>}</article>;
+  }
+
   async function logout() { await supabase.auth.signOut(); router.replace('/auth/login'); }
 
-  return (
-    <AppShell userName={userName} userInitial={userInitial} onLogout={logout} onOpenNewProject={() => setModalOpen(true)}>
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
-        <PageHeader title="Minhas tarefas" subtitle="Acompanhe as tarefas atribuídas a você em todos os projetos." />
-        <section className="surface-panel grid gap-3 p-4 md:grid-cols-4">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar tarefa..." className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary/50 md:col-span-2" />
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Todos os projetos</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="todos">Todos os status</option><option value="pendentes">Pendentes</option><option value="concluidas">Concluídas</option></select>
-          <select value={dueFilter} onChange={(event) => setDueFilter(event.target.value as DueFilter)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground md:col-span-2"><option value="todos">Todos os prazos</option><option value="atrasadas">Atrasadas</option><option value="proximas">Próximos 7 dias</option><option value="sem_prazo">Sem prazo</option></select>
-          <button type="button" onClick={() => setModalOpen(true)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Plus className="size-4" /> Nova tarefa</button>
-        </section>
-        {loading ? <div className="surface-panel flex min-h-56 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin text-primary" />Carregando tarefas...</div> : error ? <div className="surface-panel"><EmptyState icon={<TriangleAlert className="size-6" />} title="Não foi possível carregar as tarefas" description={error} action={<button type="button" onClick={() => user && void load(user.id)} className="rounded-xl border border-border px-4 py-2 text-sm">Tentar novamente</button>} /></div> : visibleTasks.length === 0 ? <div className="surface-panel"><EmptyState icon={<ListChecks className="size-6" />} title="Nenhuma tarefa encontrada" description="As tarefas atribuídas a você aparecerão aqui." /></div> : <section className="grid gap-3">{visibleTasks.map((task) => <article key={task.id_tarefa} className="card-elevated flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="truncate font-semibold text-foreground">{task.nome}</h2><span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] text-primary">{task.prioridade || 'Media'}</span></div><p className="mt-1 text-sm text-muted-foreground">{task.projeto_nome} · {task.status_nome}</p><p className={`mt-1 text-xs ${task.prazo && new Date(`${task.prazo}T00:00:00`) < new Date() && !isCompleted(task) ? 'text-danger' : 'text-muted-foreground'}`}>Prazo: {formatDueDate(task.prazo)}</p></div>{isCompleted(task) ? <span className="inline-flex items-center gap-2 text-sm text-success"><CheckCircle2 className="size-4" />Concluída</span> : <button type="button" onClick={() => void handleComplete(task)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-success/30 px-3 py-2 text-sm text-success hover:bg-success/10"><CheckCircle2 className="size-4" />Concluir</button>}</article>)}</section>}
-      </div>
-      {modalOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-sm"><form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="font-display text-xl font-semibold text-foreground">Nova tarefa</h2><button type="button" onClick={() => setModalOpen(false)} className="text-muted-foreground">Fechar</button></div><div className="grid gap-3"><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Nome da tarefa" className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground" /><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Descrição (opcional)" className="min-h-24 rounded-xl border border-border bg-background p-3 text-sm text-foreground" /><select required value={newProjectId} onChange={(event) => setNewProjectId(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione o projeto</option>{projects.filter((project) => project.myRole !== 'viewer').map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><select required value={newStatusId} onChange={(event) => setNewStatusId(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione o status</option>{statuses.map((status) => <option key={status.id_status} value={status.id_status}>{status.nome}</option>)}</select><div className="grid gap-3 sm:grid-cols-2"><select value={priority} onChange={(event) => setPriority(event.target.value as TarefaPrioridade)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div></div><button disabled={saving} type="submit" className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-60">{saving ? 'Salvando...' : 'Criar tarefa'}</button></form></div>}
-    </AppShell>
-  );
+  return <AppShell userName={userName} userInitial={userInitial} onLogout={logout} onOpenNewProject={() => setModalOpen(true)}><div className="mx-auto flex max-w-[1400px] flex-col gap-5"><PageHeader title="Minhas tarefas" subtitle={`${visibleTasks.length} de ${tasks.length} tarefas visíveis com os filtros atuais.`} actions={<div className="flex items-center gap-2"><div className="inline-flex rounded-xl border border-border bg-muted/40 p-1"><button type="button" onClick={() => setView('kanban')} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium ${view === 'kanban' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><KanbanSquare className="size-4" />Kanban</button><button type="button" onClick={() => setView('list')} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium ${view === 'list' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><List className="size-4" />Lista</button></div><button type="button" onClick={() => setModalOpen(true)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Plus className="size-4" />Nova tarefa</button></div>} /><section className="surface-panel grid gap-3 p-4 md:grid-cols-6"><div className="relative md:col-span-2"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar tarefas" className="h-10 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary/50" /></div><select aria-label="Filtrar por projeto" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Todos os projetos</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><select aria-label="Filtrar por status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Todos os status</option>{columns.map((column) => <option key={column} value={column}>{column}</option>)}</select><select aria-label="Filtrar por prioridade" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Todas as prioridades</option><option value="Alta">Alta</option><option value="Media">Média</option><option value="Baixa">Baixa</option></select><select aria-label="Filtrar por responsável" value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value as ResponsibleFilter)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="mine">Responsável: eu</option><option value="any">Qualquer responsável</option></select><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value as DueFilter)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="any">Qualquer prazo</option><option value="7">Próximos 7 dias</option><option value="30">Próximos 30 dias</option></select></section>{loading ? <div className="surface-panel flex min-h-64 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin text-primary" />Carregando tarefas...</div> : error ? <div className="surface-panel"><EmptyState icon={<TriangleAlert className="size-6" />} title="Não foi possível carregar as tarefas" description={error} action={<button type="button" onClick={() => user && void load(user.id)} className="rounded-xl border border-border px-4 py-2 text-sm">Tentar novamente</button>} /></div> : visibleTasks.length === 0 ? <div className="surface-panel"><EmptyState icon={<List className="size-6" />} title="Nenhuma tarefa encontrada" description="Ajuste os filtros ou crie uma nova tarefa para começar." action={<button type="button" onClick={() => setModalOpen(true)} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Nova tarefa</button>} /></div> : view === 'kanban' ? <section className="grid gap-4 xl:grid-cols-4">{columns.map((column) => { const columnTasks = visibleTasks.filter((task) => task.status_nome === column); return <div key={column} className="min-w-0 rounded-2xl border border-border bg-muted/20 p-3"><div className="mb-3 flex items-center justify-between border-b border-border/70 pb-3"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${column.toLocaleLowerCase('pt-BR').includes('concl') ? 'bg-success' : column.toLocaleLowerCase('pt-BR').includes('andamento') ? 'bg-warning' : 'bg-primary'}`} /><h2 className="text-sm font-semibold text-foreground">{column}</h2></div><span className="grid min-w-7 place-items-center rounded-full bg-background px-2 py-1 text-xs text-muted-foreground">{columnTasks.length}</span></div><div className="space-y-3">{columnTasks.map(taskCard)}{columnTasks.length === 0 && <div className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-xs text-muted-foreground">Nenhuma tarefa nesta coluna.</div>}<button type="button" onClick={() => setModalOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"><Plus className="size-3.5" />Adicionar tarefa</button></div></div>; })}</section> : <section className="surface-panel overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="border-b border-border bg-muted/25"><tr><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tarefa</th><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projeto</th><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</th><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prioridade</th><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prazo</th><th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ação</th></tr></thead><tbody className="divide-y divide-border">{visibleTasks.map((task) => <tr key={task.id_tarefa} className="hover:bg-muted/20"><td className="px-5 py-4"><button type="button" onClick={() => router.push(`/projects/${task.id_projeto}`)} className="text-sm font-semibold text-foreground hover:text-primary">{task.nome}</button></td><td className="px-5 py-4 text-sm text-muted-foreground">{task.projeto_nome}</td><td className="px-5 py-4 text-sm text-muted-foreground">{task.status_nome}</td><td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-xs font-medium ${priorityTone(task.prioridade)}`}>{task.prioridade || 'Media'}</span></td><td className="px-5 py-4 text-sm text-muted-foreground">{formatDate(task.prazo)}</td><td className="px-5 py-4">{isCompleted(task) ? <span className="text-xs text-success">Concluída</span> : <button type="button" onClick={() => void handleComplete(task)} className="text-xs font-medium text-success hover:underline">Concluir</button>}</td></tr>)}</tbody></table></section>}</div>{modalOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur-sm"><form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-display text-xl font-semibold text-foreground">Nova tarefa</h2><p className="mt-1 text-sm text-muted-foreground">Adicione uma atividade ao projeto.</p></div><button type="button" onClick={() => setModalOpen(false)} className="text-sm text-muted-foreground">Fechar</button></div><div className="grid gap-3"><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Nome da tarefa" className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground" /><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Descrição (opcional)" className="min-h-24 rounded-xl border border-border bg-background p-3 text-sm text-foreground" /><select required value={newProjectId} onChange={(event) => setNewProjectId(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione o projeto</option>{projects.filter((project) => project.myRole !== 'viewer').map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><select required value={newStatusId} onChange={(event) => setNewStatusId(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione o status</option>{statuses.map((status) => <option key={status.id_status} value={status.id_status}>{status.nome}</option>)}</select><div className="grid gap-3 sm:grid-cols-2"><select value={priority} onChange={(event) => setPriority(event.target.value as TarefaPrioridade)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div></div><button disabled={saving} type="submit" className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-60">{saving ? 'Salvando...' : 'Criar tarefa'}</button></form></div>}</AppShell>;
 }
