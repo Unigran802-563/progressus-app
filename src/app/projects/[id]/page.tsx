@@ -178,6 +178,19 @@ export default function ProjectDetailPage() {
     };
   }, [loadProject, router]);
 
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+
+    function refreshProjectSummary() {
+      void loadProject(userId);
+    }
+
+    window.addEventListener("progressus:tasks-changed", refreshProjectSummary);
+    return () =>
+      window.removeEventListener("progressus:tasks-changed", refreshProjectSummary);
+  }, [loadProject, user]);
+
   const userName = useMemo(() => {
     const metadataName = user?.user_metadata?.nome || user?.user_metadata?.name;
 

@@ -28,6 +28,7 @@ type AppShellProps = {
   userInitial: string;
   onLogout: () => Promise<void> | void;
   onOpenNewProject?: () => void;
+  createLabel?: string;
 };
 
 const navigation = [
@@ -89,6 +90,7 @@ export default function AppShell({
   userInitial,
   onLogout,
   onOpenNewProject,
+  createLabel = "Novo projeto",
 }: AppShellProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -208,7 +210,7 @@ export default function AppShell({
             className="glow-accent flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
           >
             <Plus className="size-4" aria-hidden="true" />
-            Novo projeto
+            {createLabel}
           </button>
         </div>
       </div>
