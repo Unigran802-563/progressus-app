@@ -20,6 +20,7 @@ import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader, Panel } from "@/components/ui/progressus-ui";
 import { createProject, listProjects } from "@/lib/projects";
+import { obterMetricasTarefas, type TaskMetrics } from "@/lib/tasks";
 import { supabase } from "@/lib/supabase";
 import type { CreateProjectData, Project } from "@/types";
 
@@ -51,6 +52,13 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [taskMetrics, setTaskMetrics] = useState<TaskMetrics>({
+    abertas: 0,
+    emProgresso: 0,
+    concluidas: 0,
+    atrasadas: 0,
+  });
+  const [isMetricsLoading, setIsMetricsLoading] = useState(true);
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [projectError, setProjectError] = useState("");
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
@@ -72,6 +80,17 @@ export default function HomePage() {
     }
   }, []);
 
+  const loadTaskMetrics = useCallback(async () => {
+    try {
+      setIsMetricsLoading(true);
+      setTaskMetrics(await obterMetricasTarefas());
+    } catch (error) {
+      console.error("Não foi possível carregar as métricas de tarefas.", error);
+    } finally {
+      setIsMetricsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -90,6 +109,7 @@ export default function HomePage() {
       setUser(data.session.user);
       setIsLoading(false);
       void loadProjects();
+      void loadTaskMetrics();
     }
 
     void checkSession();
@@ -97,7 +117,16 @@ export default function HomePage() {
     return () => {
       isMounted = false;
     };
-  }, [loadProjects, router]);
+  }, [loadProjects, loadTaskMetrics, router]);
+
+  useEffect(() => {
+    function refreshMetrics() {
+      void loadTaskMetrics();
+    }
+
+    window.addEventListener("progressus:tasks-changed", refreshMetrics);
+    return () => window.removeEventListener("progressus:tasks-changed", refreshMetrics);
+  }, [loadTaskMetrics]);
 
   const userName = useMemo(() => {
     const metadataName = user?.user_metadata?.nome || user?.user_metadata?.name;
@@ -202,13 +231,23 @@ export default function HomePage() {
                   >
                     <Icon className="size-[18px]" aria-hidden="true" />
                   </span>
-                  <span className="text-xs text-muted-foreground">Sem dados</span>
+                  <span className="text-xs text-muted-foreground">
+                    {isMetricsLoading ? "Carregando" : "Dados reais"}
+                  </span>
                 </div>
-                <p className="mt-4 font-display text-3xl font-bold text-foreground">0</p>
-                <p className="text-sm text-muted-foreground">{metric.label}</p>
-                <p className="mt-2 text-[11px] text-muted-foreground/70">
-                  Nenhuma atividade registrada
+                <p className="mt-4 font-display text-3xl font-bold text-foreground">
+                  {isMetricsLoading
+                    ? "—"
+                    : metric.label === "Tarefas abertas"
+                      ? taskMetrics.abertas
+                      : metric.label === "Em progresso"
+                        ? taskMetrics.emProgresso
+                        : metric.label === "Concluídas"
+                          ? taskMetrics.concluidas
+                          : taskMetrics.atrasadas}
                 </p>
+                <p className="text-sm text-muted-foreground">{metric.label}</p>
+                <p className="mt-2 text-[11px] text-muted-foreground/70">Atualizado a partir das tarefas do usuário</p>
               </article>
             );
           })}

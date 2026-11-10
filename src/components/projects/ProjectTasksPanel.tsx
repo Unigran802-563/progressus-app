@@ -18,6 +18,7 @@ import {
   listarTarefas,
 } from "@/lib/tasks";
 import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
+import { supabase } from "@/lib/supabase";
 import type { Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 type ProjectTasksPanelProps = {
@@ -48,6 +49,8 @@ export default function ProjectTasksPanel({
   const [prioridade, setPrioridade] =
     useState<TarefaPrioridade>("Media");
   const [statusInicial, setStatusInicial] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [prazo, setPrazo] = useState("");
 
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] =
     useState(false);
@@ -98,6 +101,12 @@ export default function ProjectTasksPanel({
     };
   }, [projectId]);
 
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
+
   const tarefasPorStatus = useMemo(() => {
     return status.map((coluna) => ({
       ...coluna,
@@ -111,6 +120,7 @@ export default function ProjectTasksPanel({
     setNome("");
     setDescricao("");
     setPrioridade("Media");
+    setPrazo("");
     setError("");
 
     if (status.length > 0) {
@@ -160,6 +170,11 @@ export default function ProjectTasksPanel({
       return;
     }
 
+    if (!currentUserId) {
+      setError("Não foi possível identificar o usuário autenticado.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -167,9 +182,11 @@ export default function ProjectTasksPanel({
       const novaTarefa = await criarTarefa({
         id_projeto: projectId,
         id_status: statusInicial,
+        id_usuario: currentUserId,
         nome,
         descricao,
         prioridade,
+        prazo: prazo || null,
       });
 
       setTarefas((currentTasks) => [
@@ -796,6 +813,23 @@ export default function ProjectTasksPanel({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="project-task-due-date"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
+                  Prazo
+                </label>
+
+                <input
+                  id="project-task-due-date"
+                  type="date"
+                  value={prazo}
+                  onChange={(event) => setPrazo(event.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary"
+                />
               </div>
 
               <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
