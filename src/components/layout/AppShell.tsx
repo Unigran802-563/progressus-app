@@ -42,7 +42,7 @@ const navigation = [
     label: "Minhas tarefas",
     icon: ListChecks,
     href: "/tasks",
-    available: false,
+    available: true,
   },
   {
     label: "Calendário",
@@ -158,7 +158,10 @@ export default function AppShell({
         >
           {navigation.map((item) => {
             const Icon = item.icon;
-            const isActive = item.available && pathname === item.href;
+            const isActive =
+              item.available &&
+              (pathname === item.href ||
+                (item.href !== "/" && pathname.startsWith(`${item.href}/`)));
 
             if (!item.available) {
               return (
