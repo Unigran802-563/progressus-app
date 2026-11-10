@@ -8,14 +8,17 @@ import {
   Archive,
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
   FileText,
   FolderKanban,
   Loader2,
   MessageSquare,
   PencilLine,
   ShieldCheck,
+  Target,
   TriangleAlert,
   UserPlus,
+  UsersRound,
   X,
 } from "lucide-react";
 
@@ -41,6 +44,14 @@ import type {
   UpdateProjectData,
 } from "@/types";
 
+type ProjectTaskSummary = {
+  total: number;
+  open: number;
+  completed: number;
+};
+
+type ProjectTab = "overview" | "tasks" | "members" | "files" | "activity";
+
 function formatProjectDate(date: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -65,6 +76,12 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
   const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
+  const [taskSummary, setTaskSummary] = useState<ProjectTaskSummary>({
+    total: 0,
+    open: 0,
+    completed: 0,
+  });
+  const [activeTab, setActiveTab] = useState<ProjectTab>("overview");
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isParticipantsLoading, setIsParticipantsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
@@ -80,11 +97,22 @@ export default function ProjectDetailPage() {
       try {
         setPageError("");
 
-        const [projectData, memberData, participantsData] = await Promise.all([
+        const [projectData, memberData, participantsData, tasksResult, statusesResult] = await Promise.all([
           getProject(projectId),
           getProjectMember(projectId, currentUserId),
           listProjectParticipants(projectId),
+          supabase
+            .from("tarefa")
+            .select("id_tarefa, id_status")
+            .eq("id_projeto", projectId),
+          supabase
+            .from("status")
+            .select("id_status, nome")
+            .eq("id_projeto", projectId),
         ]);
+
+        if (tasksResult.error) throw new Error(tasksResult.error.message);
+        if (statusesResult.error) throw new Error(statusesResult.error.message);
 
         if (!projectData) {
           setProject(null);
@@ -95,6 +123,21 @@ export default function ProjectDetailPage() {
         setProject(projectData);
         setProjectRole(memberData?.role ?? null);
         setParticipants(participantsData);
+
+        const completedStatusIds = new Set(
+          ((statusesResult.data ?? []) as Array<{ id_status: string; nome: string }>)
+            .filter((item) => item.nome.toLocaleLowerCase("pt-BR").includes("concl"))
+            .map((item) => item.id_status),
+        );
+        const taskRows = (tasksResult.data ?? []) as Array<{ id_status: string | null }>;
+        const completed = taskRows.filter(
+          (task) => task.id_status && completedStatusIds.has(task.id_status),
+        ).length;
+        setTaskSummary({
+          total: taskRows.length,
+          completed,
+          open: taskRows.length - completed,
+        });
       } catch (error) {
         setPageError(
           error instanceof Error
@@ -312,61 +355,132 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 border-t border-border pt-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-4 border-t border-border pt-5 sm:grid-cols-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Criado em
+                    Progresso
                   </p>
-
-                  <p className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <CalendarClock
-                      className="size-4 text-primary"
-                      aria-hidden="true"
+                  <p className="mt-2 text-2xl font-bold text-foreground">
+                    {taskSummary.total > 0
+                      ? Math.round((taskSummary.completed / taskSummary.total) * 100)
+                      : 0}%
+                  </p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-accent">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{
+                        width: `${taskSummary.total > 0 ? (taskSummary.completed / taskSummary.total) * 100 : 0}%`,
+                      }}
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Tarefas
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">{taskSummary.total}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{taskSummary.open} abertas</p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Equipe
+                  </p>
+                  <p className="mt-2 flex items-center gap-2 text-2xl font-bold text-foreground">
+                    <UsersRound className="size-5 text-primary" aria-hidden="true" />
+                    {participants.length}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">participantes</p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Criado em</p>
+                  <p className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                    <CalendarClock className="size-4 text-primary" aria-hidden="true" />
                     {formatProjectDate(project.createdAt)}
                   </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Seu acesso
-                  </p>
-
-                  <p className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                    <ShieldCheck
-                      className="size-4 text-primary"
-                      aria-hidden="true"
-                    />
-                    {getRoleLabel(projectRole)}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Situação
-                  </p>
-
-                  <p className="mt-2 text-sm font-medium text-foreground">
-                    {project.archivedAt
-                      ? "Projeto arquivado"
-                      : "Projeto em andamento"}
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{getRoleLabel(projectRole)}</p>
                 </div>
               </div>
             </section>
 
-            <section className="grid grid-cols-1 gap-4">
-              <Panel title="Tarefas" bodyClassName="p-0">
-                <ProjectTasksPanel
-                  projectId={project.id}
-                  disabled={Boolean(project.archivedAt)}
-                />
-              </Panel>
+            <div className="surface-panel overflow-hidden">
+              <div className="flex gap-1 overflow-x-auto border-b border-border px-3 pt-2">
+                {([
+                  ["overview", "Visão geral"],
+                  ["tasks", "Tarefas"],
+                  ["members", "Membros"],
+                  ["files", "Arquivos"],
+                  ["activity", "Atividade"],
+                ] as Array<[ProjectTab, string]>).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
+                      activeTab === tab
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-              <Panel
-                title={`Participantes (${participants.length})`}
-                bodyClassName="p-0"
-              >
+              {activeTab === "overview" && (
+                <div className="grid gap-4 p-5 lg:grid-cols-[1.25fr_0.75fr]">
+                  <Panel title="Resumo das tarefas" bodyClassName="p-0">
+                    <div className="divide-y divide-border">
+                      <button type="button" onClick={() => setActiveTab("tasks")} className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/40">
+                        <span className="grid size-9 place-items-center rounded-xl bg-primary/15 text-primary"><Target className="size-4" aria-hidden="true" /></span>
+                        <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">Organização das tarefas</span><span className="mt-1 block text-xs text-muted-foreground">{taskSummary.total} cadastradas · {taskSummary.completed} concluídas</span></span>
+                        <span className="text-xs font-medium text-primary">Abrir</span>
+                      </button>
+                      <div className="grid grid-cols-3 gap-3 p-4">
+                        <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 text-xl font-bold text-foreground">{taskSummary.total}</p></div>
+                        <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Abertas</p><p className="mt-1 text-xl font-bold text-foreground">{taskSummary.open}</p></div>
+                        <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Concluídas</p><p className="mt-1 text-xl font-bold text-success">{taskSummary.completed}</p></div>
+                      </div>
+                    </div>
+                  </Panel>
+
+                  <div className="grid gap-4">
+                    <Panel title="Marcos do projeto">
+                      <div className="space-y-3">
+                        {[
+                          ["Projeto criado", true],
+                          ["Tarefas organizadas", taskSummary.total > 0],
+                          ["Primeira entrega concluída", taskSummary.completed > 0],
+                        ].map(([label, done], index) => (
+                          <div key={String(label)} className="flex items-center gap-3">
+                            <span className={`grid size-7 place-items-center rounded-full text-xs font-semibold ${done ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+                              {done ? <CheckCircle2 className="size-4" aria-hidden="true" /> : index + 1}
+                            </span>
+                            <span className={`text-sm ${done ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Panel>
+
+                    <Panel title="Compartilhamento">
+                      <p className="text-sm leading-6 text-muted-foreground">{isOwner ? "Convide participantes para colaborar neste projeto." : "Você participa deste projeto com acesso compartilhado."}</p>
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">{participants.length} participantes</span>
+                        {isOwner && !project.archivedAt && <button type="button" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted">Gerenciar</button>}
+                      </div>
+                    </Panel>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "tasks" && (
+                <ProjectTasksPanel projectId={project.id} disabled={Boolean(project.archivedAt)} />
+              )}
+
+              {activeTab === "members" && (
+                <Panel title={`Participantes (${participants.length})`} bodyClassName="p-0">
                 {isParticipantsLoading ? (
                   <div className="flex min-h-36 items-center justify-center gap-2 text-sm text-muted-foreground">
                     <Loader2
@@ -423,16 +537,19 @@ export default function ProjectDetailPage() {
                     description="Use o botão Compartilhar para convidar alguém."
                   />
                 )}
-              </Panel>
+                </Panel>
+              )}
 
-              <Panel title="Arquivos" bodyClassName="p-0">
+              {activeTab === "files" && <Panel title="Arquivos" bodyClassName="p-0">
                 <EmptyState
                   icon={<FileText className="size-5" aria-hidden="true" />}
                   title="Nenhum arquivo enviado"
                   description="O envio de documentos será integrado ao projeto posteriormente."
                 />
-              </Panel>
-            </section>
+              </Panel>}
+
+              {activeTab === "activity" && <EmptyState icon={<CalendarClock className="size-5" aria-hidden="true" />} title="Nenhuma atividade registrada" description="As alterações e atividades do projeto aparecerão aqui." />}
+            </div>
           </>
         )}
       </div>
