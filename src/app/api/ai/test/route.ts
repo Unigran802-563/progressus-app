@@ -38,6 +38,7 @@ export async function POST() {
           error instanceof Error && error.message.includes('Tempo limite')
             ? 'A conexão com o Gemini excedeu 15 segundos. Verifique a chave, o modelo e a disponibilidade da API.'
             : 'Não foi possível consultar a Gemini API.',
+        detail: error instanceof Error ? error.message : 'Erro desconhecido na API Gemini.',
       },
       { status: 500 },
     );
