@@ -40,9 +40,10 @@ export async function POST(request: NextRequest) {
     };
 
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.interactions.create({
-      model: 'gemini-3.8-flash',
-      input: [{ type: 'user_input', content: [{ type: 'text', text: `Você é o assistente do Progressus, um sistema de projetos acadêmicos. Responda em português do Brasil, de forma objetiva e útil.
+    const response = await Promise.race([
+      ai.interactions.create({
+        model: 'gemini-3.8-flash',
+        input: [{ type: 'user_input', content: [{ type: 'text', text: `Você é o assistente do Progressus, um sistema de projetos acadêmicos. Responda em português do Brasil, de forma objetiva e útil.
 
 Use exclusivamente os dados reais abaixo. Se a resposta não puder ser obtida desses dados, diga claramente que não encontrei essa informação. Nunca invente projetos, tarefas, prazos, responsáveis ou status. Não revele IDs internos, tokens ou dados que não ajudem o usuário. Considere que o contexto já foi filtrado pelas permissões do usuário.
 
@@ -51,13 +52,19 @@ ${JSON.stringify(context)}
 
 Pergunta do usuário:
 ${message}` }] }],
-    });
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Tempo limite excedido ao consultar o Gemini.')), 20000),
+      ),
+    ]);
 
     return NextResponse.json({ success: true, answer: response.output_text?.trim() || 'Não consegui encontrar uma resposta com os dados disponíveis.' });
   } catch (error) {
     console.error('Erro no chat da IA:', error);
     return NextResponse.json({
-      error: 'Não foi possível consultar a IA agora.',
+      error: error instanceof Error && error.message.includes('Tempo limite')
+        ? 'A consulta ao Gemini excedeu 20 segundos. Verifique a chave e a disponibilidade da API.'
+        : 'Não foi possível consultar a IA agora.',
       detail: error instanceof Error ? error.message : 'Erro desconhecido na API Gemini.',
     }, { status: 500 });
   }

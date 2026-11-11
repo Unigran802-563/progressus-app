@@ -14,11 +14,16 @@ export async function POST() {
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    const response = await ai.interactions.create({
-      model: 'gemini-3.8-flash',
-      input:
-        'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.',
-    });
+    const response = await Promise.race([
+      ai.interactions.create({
+        model: 'gemini-3.8-flash',
+        input:
+          'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.',
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Tempo limite excedido ao consultar o Gemini.')), 15000),
+      ),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -29,7 +34,10 @@ export async function POST() {
 
     return NextResponse.json(
       {
-        error: 'Não foi possível consultar a Gemini API.',
+        error:
+          error instanceof Error && error.message.includes('Tempo limite')
+            ? 'A conexão com o Gemini excedeu 15 segundos. Verifique a chave, o modelo e a disponibilidade da API.'
+            : 'Não foi possível consultar a Gemini API.',
       },
       { status: 500 },
     );
