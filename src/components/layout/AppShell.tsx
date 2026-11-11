@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Bell,
@@ -52,18 +52,18 @@ const navigation = [
     available: true,
   },
   { label: "Chat", icon: MessageSquare, href: "/chat", available: true },
-  { label: "Inteligência", icon: Sparkles, href: "/ai", available: false },
+  { label: "IA", icon: Sparkles, href: "/ai", available: true },
   {
     label: "Notificações",
     icon: Bell,
     href: "/notifications",
-    available: false,
+    available: true,
   },
   {
     label: "Configurações",
     icon: Settings,
     href: "/settings",
-    available: false,
+    available: true,
   },
 ] as const;
 
@@ -96,6 +96,14 @@ export default function AppShell({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    const readCount = () => setUnreadNotifications(Number(window.localStorage.getItem("progressus:unread-notifications") || 0));
+    readCount();
+    window.addEventListener("progressus:notifications-changed", readCount);
+    return () => window.removeEventListener("progressus:notifications-changed", readCount);
+  }, []);
 
   function showUnavailableFeature() {
     setNotice(
@@ -272,14 +280,14 @@ export default function AppShell({
                 Criar
               </button>
 
-              <button
-                type="button"
-                onClick={showUnavailableFeature}
-                className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              <Link
+                href="/notifications"
+                className="relative grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted-foreground transition hover:bg-accent hover:text-foreground"
                 aria-label="Notificações"
               >
                 <Bell className="size-[18px]" aria-hidden="true" />
-              </button>
+                {unreadNotifications > 0 && <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
+              </Link>
 
               <div className="relative">
                 <button
@@ -304,22 +312,22 @@ export default function AppShell({
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={showUnavailableFeature}
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
                     >
                       <UserRound className="size-4" aria-hidden="true" />
                       Perfil
-                    </button>
-                    <button
-                      type="button"
-                      onClick={showUnavailableFeature}
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
                     >
                       <Settings className="size-4" aria-hidden="true" />
                       Preferências
-                    </button>
+                    </Link>
                     <div className="my-1 h-px bg-border" />
                     <button
                       type="button"
