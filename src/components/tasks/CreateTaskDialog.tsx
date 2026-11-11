@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ClipboardPlus, Loader2, X } from 'lucide-react';
 
-import { criarTarefa, listarStatus } from '@/lib/tasks';
+import { criarTarefa, listarOuCriarStatus } from '@/lib/tasks';
 import type { TarefaPrioridade, TarefaStatus } from '@/types';
 
 type CreateTaskDialogProps = {
@@ -48,7 +48,7 @@ export default function CreateTaskDialog({
     let active = true;
     setLoadingStatuses(true);
     setError('');
-    void listarStatus(projectId)
+    void listarOuCriarStatus(projectId)
       .then((items) => {
         if (!active) return;
         setStatuses(items);

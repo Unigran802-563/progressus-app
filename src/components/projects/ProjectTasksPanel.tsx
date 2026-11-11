@@ -14,7 +14,7 @@ import {
 import {
   alterarStatusTarefa,
   criarTarefa,
-  listarStatus,
+  listarOuCriarStatus,
   listarTarefas,
 } from "@/lib/tasks";
 import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
@@ -67,7 +67,7 @@ export default function ProjectTasksPanel({
         setError("");
 
         const [statusData, tarefasData] = await Promise.all([
-          listarStatus(projectId),
+          listarOuCriarStatus(projectId),
           listarTarefas(projectId),
         ]);
 

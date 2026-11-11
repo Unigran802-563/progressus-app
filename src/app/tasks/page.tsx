@@ -7,7 +7,7 @@ import { CalendarDays, CheckCircle2, KanbanSquare, List, Loader2, Plus, Search, 
 
 import AppShell from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui/progressus-ui';
-import { atualizarTarefa, criarTarefa, listarMinhasTarefas, listarStatus, type MinhaTarefa } from '@/lib/tasks';
+import { atualizarTarefa, criarTarefa, listarMinhasTarefas, listarOuCriarStatus, type MinhaTarefa } from '@/lib/tasks';
 import { listAccessibleProjects } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 import type { AccessibleProject, TarefaPrioridade, TarefaStatus } from '@/types';
@@ -131,7 +131,7 @@ export default function MyTasksPage() {
       setNewStatusId('');
       return;
     }
-    void listarStatus(newProjectId).then((items) => {
+    void listarOuCriarStatus(newProjectId).then((items) => {
       setStatuses(items);
       setNewStatusId(items[0]?.id_status ?? '');
     }).catch(() => {
@@ -156,7 +156,7 @@ export default function MyTasksPage() {
 
   async function handleComplete(task: MinhaTarefa) {
     try {
-      const projectStatuses = await listarStatus(task.id_projeto);
+      const projectStatuses = await listarOuCriarStatus(task.id_projeto);
       const completed = projectStatuses.find((item) => item.nome.toLocaleLowerCase('pt-BR').includes('concl'));
       if (!completed) {
         setError('Não existe uma coluna de status concluído neste projeto.');

@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   alterarStatusTarefa,
   criarTarefa,
-  listarStatus,
+  listarOuCriarStatus,
   listarTarefas,
 } from '@/lib/tasks';
 import {
@@ -45,7 +45,7 @@ export default function TasksPage({ params }: TasksPageProps) {
         setProjectId(id);
 
         const [statusData, tarefasData] = await Promise.all([
-          listarStatus(id),
+          listarOuCriarStatus(id),
           listarTarefas(id),
         ]);
 

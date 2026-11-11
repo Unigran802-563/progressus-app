@@ -7,7 +7,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Plus, TriangleAlert }
 
 import AppShell from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui/progressus-ui';
-import { atualizarTarefa, criarTarefa, listarMinhasTarefas, listarStatus, type MinhaTarefa } from '@/lib/tasks';
+import { atualizarTarefa, criarTarefa, listarMinhasTarefas, listarOuCriarStatus, type MinhaTarefa } from '@/lib/tasks';
 import { listAccessibleProjects } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 import type { AccessibleProject, TarefaPrioridade, TarefaStatus } from '@/types';
@@ -102,7 +102,7 @@ export default function CalendarPage() {
       setStatusId('');
       return;
     }
-    void listarStatus(projectId).then((items) => {
+    void listarOuCriarStatus(projectId).then((items) => {
       setStatuses(items);
       setStatusId(items[0]?.id_status ?? '');
     }).catch(() => setStatuses([]));

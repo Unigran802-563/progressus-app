@@ -34,6 +34,13 @@ export type TaskMetrics = {
   atrasadas: number;
 };
 
+const defaultStatuses = [
+  { nome: 'A fazer', ordem: 0 },
+  { nome: 'Em andamento', ordem: 1 },
+  { nome: 'Em revisão', ordem: 2 },
+  { nome: 'Concluído', ordem: 3 },
+] as const;
+
 export function notifyTasksChanged() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('progressus:tasks-changed'));
@@ -78,6 +85,26 @@ export async function listarStatus(idProjeto: string): Promise<TarefaStatus[]> {
     .order('ordem', { ascending: true });
   throwIfError(error);
   return (data ?? []) as TarefaStatus[];
+}
+
+export async function listarOuCriarStatus(idProjeto: string): Promise<TarefaStatus[]> {
+  const existing = await listarStatus(idProjeto);
+  if (existing.length > 0) return existing;
+
+  const { error: insertError } = await supabase.from('status').insert(
+    defaultStatuses.map((status) => ({
+      id_projeto: idProjeto,
+      nome: status.nome,
+      ordem: status.ordem,
+    })),
+  );
+  if (insertError) {
+    const afterInsert = await listarStatus(idProjeto);
+    if (afterInsert.length > 0) return afterInsert;
+    throwIfError(insertError);
+  }
+
+  return listarStatus(idProjeto);
 }
 
 export async function listarTarefas(idProjeto: string): Promise<Tarefa[]> {
