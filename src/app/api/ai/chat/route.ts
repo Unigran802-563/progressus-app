@@ -56,6 +56,9 @@ ${message}` }] }],
     return NextResponse.json({ success: true, answer: response.output_text?.trim() || 'Não consegui encontrar uma resposta com os dados disponíveis.' });
   } catch (error) {
     console.error('Erro no chat da IA:', error);
-    return NextResponse.json({ error: 'Não foi possível consultar a IA agora.' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Não foi possível consultar a IA agora.',
+      detail: error instanceof Error ? error.message : 'Erro desconhecido na API Gemini.',
+    }, { status: 500 });
   }
 }
