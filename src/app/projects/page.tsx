@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
+import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader } from "@/components/ui/progressus-ui";
 import { createProject, listAccessibleProjects } from "@/lib/projects";
@@ -97,6 +98,7 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeFilter, setActiveFilter] = useState<ProjectFilter>("all");
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
+  const [taskProject, setTaskProject] = useState<AccessibleProject | null>(null);
   const [notice, setNotice] = useState("");
 
   const loadProjects = useCallback(async () => {
@@ -197,6 +199,14 @@ export default function ProjectsPage() {
     await loadProjects();
     setIsNewProjectDialogOpen(false);
     showNotice("Projeto criado com sucesso.");
+  }
+
+  function openTaskDialog(project: AccessibleProject) {
+    if (project.myRole === "viewer") {
+      showNotice("Você não tem permissão para criar tarefas neste projeto.");
+      return;
+    }
+    setTaskProject(project);
   }
 
   async function handleLogout() {
@@ -406,11 +416,14 @@ export default function ProjectsPage() {
             aria-label="Lista de projetos"
           >
             {visibleProjects.map((project) => (
-              <Link
+              <div
                 key={project.id}
-                href={`/projects/${project.id}`}
-                className="card-elevated flex min-h-56 flex-col gap-4 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30"
+                className="card-elevated flex min-h-56 flex-col gap-4 p-5 transition-all hover:border-primary/30"
               >
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="flex min-h-0 flex-1 flex-col gap-4"
+                >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span
@@ -439,7 +452,18 @@ export default function ProjectsPage() {
                     </span>
                   </div>
                 </div>
-              </Link>
+                </Link>
+                {project.myRole !== "viewer" && (
+                  <button
+                    type="button"
+                    onClick={() => openTaskDialog(project)}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    Criar tarefa
+                  </button>
+                )}
+              </div>
             ))}
           </section>
         ) : (
@@ -453,10 +477,11 @@ export default function ProjectsPage() {
             <ul className="divide-y divide-border">
               {visibleProjects.map((project) => (
                 <li key={project.id}>
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:gap-5"
-                  >
+                  <div className="flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50">
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:gap-5"
+                    >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
                         className={`size-2.5 shrink-0 rounded-full ${
@@ -478,7 +503,18 @@ export default function ProjectsPage() {
                     <span className="shrink-0 text-[11px] text-muted-foreground">
                       {formatProjectDate(project.createdAt)}
                     </span>
-                  </Link>
+                    </Link>
+                    {project.myRole !== "viewer" && (
+                      <button
+                        type="button"
+                        onClick={() => openTaskDialog(project)}
+                        className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+                      >
+                        <Plus className="size-3.5" aria-hidden="true" />
+                        <span className="hidden sm:inline">Criar tarefa</span>
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -491,6 +527,17 @@ export default function ProjectsPage() {
         onClose={() => setIsNewProjectDialogOpen(false)}
         onCreate={handleCreateProject}
       />
+
+      {taskProject && user && (
+        <CreateTaskDialog
+          open
+          projectId={taskProject.id}
+          projectName={taskProject.name}
+          userId={user.id}
+          onClose={() => setTaskProject(null)}
+          onCreated={() => showNotice("Tarefa criada e vinculada ao projeto.")}
+        />
+      )}
 
       {notice && (
         <div

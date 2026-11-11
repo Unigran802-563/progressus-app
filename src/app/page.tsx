@@ -324,9 +324,11 @@ export default function HomePage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
-                <article
+                <button
+                  type="button"
+                  onClick={() => router.push(`/projects/${project.id}`)}
                   key={project.id}
-                  className="card-elevated flex min-h-48 flex-col p-5"
+                  className="card-elevated flex min-h-48 flex-col p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary">
@@ -348,7 +350,7 @@ export default function HomePage() {
                     <CalendarClock className="size-3.5" aria-hidden="true" />
                     Criado em {formatProjectDate(project.createdAt)}
                   </div>
-                </article>
+                </button>
               ))}
             </div>
           )}
