@@ -1,46 +1,39 @@
-import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
 
 export async function POST() {
   const apiKey = process.env.GEMINI_API_KEY;
-
   if (!apiKey) {
-    return NextResponse.json(
-      { error: 'GEMINI_API_KEY não configurada no servidor.' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'GEMINI_API_KEY não configurada no servidor.' }, { status: 500 });
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: 'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.' }] }],
+        }),
+      },
+    );
 
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents:
-          'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.',
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Tempo limite excedido ao consultar o Gemini.')), 15000),
-      ),
-    ]);
+    const payload = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { message?: string; status?: string } };
+    if (!response.ok) {
+      return NextResponse.json({ error: 'A API Gemini recusou a solicitação.', detail: payload.error?.message || `HTTP ${response.status} (${payload.error?.status || 'erro desconhecido'})` }, { status: 502 });
+    }
 
-    return NextResponse.json({
-      success: true,
-      response: response.text,
-    });
+    const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
+    return NextResponse.json({ success: true, response: text || 'Conexão realizada, mas a API não retornou texto.' });
   } catch (error) {
     console.error('Erro ao testar a Gemini API:', error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error && error.message.includes('Tempo limite')
-            ? 'A conexão com o Gemini excedeu 15 segundos. Verifique a chave, o modelo e a disponibilidade da API.'
-            : 'Não foi possível consultar a Gemini API.',
-        detail: error instanceof Error ? error.message : 'Erro desconhecido na API Gemini.',
-      },
-      { status: 500 },
-    );
+    const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    return NextResponse.json({
+      error: timedOut ? 'A API Gemini excedeu 15 segundos.' : 'Não foi possível conectar à Gemini API.',
+      detail: error instanceof Error ? error.message : 'Erro desconhecido na conexão.',
+    }, { status: 504 });
   }
 }
