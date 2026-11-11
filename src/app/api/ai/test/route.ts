@@ -15,9 +15,9 @@ export async function POST() {
     const ai = new GoogleGenAI({ apiKey });
 
     const response = await Promise.race([
-      ai.interactions.create({
+      ai.models.generateContent({
         model: 'gemini-3.8-flash',
-        input:
+        contents:
           'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.',
       }),
       new Promise<never>((_, reject) =>
@@ -27,7 +27,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      response: response.output_text,
+      response: response.text,
     });
   } catch (error) {
     console.error('Erro ao testar a Gemini API:', error);
