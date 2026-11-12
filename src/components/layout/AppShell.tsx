@@ -22,6 +22,8 @@ import {
   X,
 } from "lucide-react";
 
+import { supabase } from "@/lib/supabase";
+
 type AppShellProps = {
   children: ReactNode;
   userName: string;
@@ -104,6 +106,48 @@ export default function AppShell({
     window.addEventListener("progressus:notifications-changed", readCount);
     return () => window.removeEventListener("progressus:notifications-changed", readCount);
   }, []);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
+
+    void supabase.auth.getSession().then(({ data }) => {
+      const userId = data.session?.user.id;
+      if (!userId || !active || pathname.startsWith("/chat")) return;
+      channel = supabase.channel(`progressus-notifications-${userId}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensagem" }, async (payload) => {
+          const message = payload.new as { id_mensagem?: string; id_chat?: string; id_usuario?: string; conteudo?: string | null; data_hora?: string };
+          if (!message.id_mensagem || !message.id_chat || message.id_usuario === userId) return;
+          const key = `progressus:chat-notifications:${userId}`;
+          const current = JSON.parse(window.localStorage.getItem(key) || "[]") as Array<Record<string, unknown>>;
+          if (current.some((item) => item.id === message.id_mensagem)) return;
+          const { data: chat } = await supabase.from("chat").select("tipo, id_projeto").eq("id_chat", message.id_chat).maybeSingle();
+          const { data: senderRows } = chat?.tipo === "grupo" && chat.id_projeto
+            ? await supabase.rpc("list_project_members", { p_project_id: chat.id_projeto })
+            : await supabase.rpc("get_private_chat_user_names", { p_user_ids: [message.id_usuario] });
+          const sender = (senderRows as Array<{ id_usuario?: string; nome?: string }> | null)?.find((item) => item.id_usuario === message.id_usuario);
+          const senderName = sender?.nome?.trim() || "Novo participante";
+          let title = `Nova mensagem de ${senderName}`;
+          let href = `/chat?chatId=${message.id_chat}`;
+          if (chat?.tipo === "grupo" && chat.id_projeto) {
+            const { data: project } = await supabase.from("projeto").select("nome").eq("id_projeto", chat.id_projeto).maybeSingle();
+            title = `Nova mensagem de ${senderName}`;
+            href = `/chat?projectId=${chat.id_projeto}`;
+            if (project?.nome) title += ` em ${project.nome}`;
+          }
+          const item = { id: message.id_mensagem, title, description: message.conteudo?.trim() || "Você recebeu uma nova mensagem.", href, kind: "chat", createdAt: message.data_hora || new Date().toISOString() };
+          window.localStorage.setItem(key, JSON.stringify([item, ...current].slice(0, 100)));
+          const unread = Number(window.localStorage.getItem("progressus:unread-notifications") || 0) + 1;
+          window.localStorage.setItem("progressus:unread-notifications", String(unread));
+          window.dispatchEvent(new Event("progressus:notifications-changed"));
+        }).subscribe();
+    });
+
+    return () => {
+      active = false;
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [pathname]);
 
   function showUnavailableFeature() {
     setNotice(
