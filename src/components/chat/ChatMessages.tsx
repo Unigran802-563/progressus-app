@@ -343,6 +343,10 @@ export function ChatMessages({
       return "Você";
     }
 
+    if (message.id_usuario === null) {
+      return "IA";
+    }
+
     const participant = participants.find(
       (item) => item.id_usuario === message.id_usuario,
     );

@@ -14,7 +14,7 @@ export async function POST() {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(60000),
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: 'Responda em português brasileiro com uma frase curta confirmando que a conexão foi realizada.' }] }],
         }),
