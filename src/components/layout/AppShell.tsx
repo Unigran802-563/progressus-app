@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Bell,
   CalendarDays,
+  ClipboardPlus,
   ChevronDown,
   FolderKanban,
+  FolderPlus,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -23,6 +25,10 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
+import NewProjectDialog from "@/components/projects/NewProjectDialog";
+import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
+import { createProject, listAccessibleProjects } from "@/lib/projects";
+import type { AccessibleProject, CreateProjectData } from "@/types";
 
 type AppShellProps = {
   children: ReactNode;
@@ -95,10 +101,17 @@ export default function AppShell({
   createLabel = "Novo projeto",
 }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
+  const [isGlobalProjectOpen, setIsGlobalProjectOpen] = useState(false);
+  const [isGlobalTaskOpen, setIsGlobalTaskOpen] = useState(false);
+  const [globalUserId, setGlobalUserId] = useState("");
+  const [globalProjects, setGlobalProjects] = useState<AccessibleProject[]>([]);
+  const [globalProjectsLoading, setGlobalProjectsLoading] = useState(false);
 
   useEffect(() => {
     const readCount = () => setUnreadNotifications(Number(window.localStorage.getItem("progressus:unread-notifications") || 0));
@@ -149,6 +162,18 @@ export default function AppShell({
     };
   }, [pathname]);
 
+  useEffect(() => {
+    if (!isCreateMenuOpen || globalProjects.length > 0) return;
+    setGlobalProjectsLoading(true);
+    void Promise.all([supabase.auth.getSession(), listAccessibleProjects()])
+      .then(([sessionResult, projects]) => {
+        setGlobalUserId(sessionResult.data.session?.user.id ?? "");
+        setGlobalProjects(projects);
+      })
+      .catch(() => setGlobalProjects([]))
+      .finally(() => setGlobalProjectsLoading(false));
+  }, [globalProjects.length, isCreateMenuOpen]);
+
   function showUnavailableFeature() {
     setNotice(
       "Esta funcionalidade será disponibilizada nas próximas etapas do Progressus.",
@@ -156,16 +181,39 @@ export default function AppShell({
     window.setTimeout(() => setNotice(""), 3200);
   }
 
-  function handleOpenNewProject() {
+  function handleOpenCreateMenu() {
     setIsMobileMenuOpen(false);
+    setIsCreateMenuOpen((current) => !current);
+  }
+
+  function handleOpenNewTask() {
+    setIsCreateMenuOpen(false);
 
     if (onOpenNewProject) {
       onOpenNewProject();
       return;
     }
 
-    showUnavailableFeature();
+    const firstEditable = globalProjects.find((project) => project.myRole !== "viewer");
+    if (!globalUserId || !firstEditable) {
+      showUnavailableFeature();
+      return;
+    }
+    setIsGlobalTaskOpen(true);
   }
+
+  function handleOpenNewProject() {
+    setIsCreateMenuOpen(false);
+    setIsGlobalProjectOpen(true);
+  }
+
+  async function handleGlobalProjectCreate(data: CreateProjectData) {
+    const project = await createProject(data);
+    setIsGlobalProjectOpen(false);
+    router.push(`/projects/${project.id}`);
+  }
+
+  const globalTaskProject = globalProjects.find((project) => project.myRole !== "viewer");
 
   async function handleLogout() {
     setIsUserMenuOpen(false);
@@ -258,7 +306,7 @@ export default function AppShell({
         <div className="mt-auto px-1 pb-1">
           <button
             type="button"
-            onClick={handleOpenNewProject}
+            onClick={handleOpenCreateMenu}
             className="glow-accent flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
           >
             <Plus className="size-4" aria-hidden="true" />
@@ -317,12 +365,25 @@ export default function AppShell({
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={handleOpenNewProject}
+                onClick={handleOpenCreateMenu}
                 className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-foreground transition hover:bg-accent sm:flex"
               >
                 <Plus className="size-4 text-primary" aria-hidden="true" />
                 Criar
               </button>
+
+              {isCreateMenuOpen && (
+                <div className="absolute right-[118px] top-14 z-40 w-52 rounded-xl border border-border bg-surface p-1.5 shadow-2xl shadow-black/30">
+                  <button type="button" onClick={handleOpenNewTask} disabled={globalProjectsLoading} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-accent disabled:opacity-50">
+                    <ClipboardPlus className="size-4 text-primary" />
+                    Nova tarefa
+                  </button>
+                  <button type="button" onClick={handleOpenNewProject} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-accent">
+                    <FolderPlus className="size-4 text-primary" />
+                    Novo projeto
+                  </button>
+                </div>
+              )}
 
               <Link
                 href="/notifications"
@@ -396,6 +457,21 @@ export default function AppShell({
 
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
+
+      <NewProjectDialog
+        open={isGlobalProjectOpen}
+        onClose={() => setIsGlobalProjectOpen(false)}
+        onCreate={handleGlobalProjectCreate}
+      />
+      {isGlobalTaskOpen && globalUserId && globalTaskProject && (
+        <CreateTaskDialog
+          open
+          projectId={globalTaskProject.id}
+          projectName={globalTaskProject.name}
+          userId={globalUserId}
+          onClose={() => setIsGlobalTaskOpen(false)}
+        />
+      )}
     </div>
   );
 }
