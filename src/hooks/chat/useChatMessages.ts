@@ -323,6 +323,51 @@ export function useChatMessages(
     };
   }, [chatId, refreshMessages, markMessagesAsRead]);
 
+  async function requestAiReply(targetChatId: string) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Sua sessão expirou. Faça login novamente.");
+      }
+
+      const response = await fetch("/api/ai/chat-reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ chatId: targetChatId }),
+      });
+
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        detail?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail
+            ? `${result.error ?? "A IA não conseguiu responder."} (${result.detail})`
+            : (result.error ?? "A IA não conseguiu responder."),
+        );
+      }
+
+      if (currentChatIdRef.current === targetChatId) {
+        await refreshMessages();
+      }
+    } catch (err) {
+      if (currentChatIdRef.current !== targetChatId) return;
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "A IA não conseguiu responder.",
+      );
+    }
+  }
+
   async function sendMessage(
     content: string,
     files: ChatFileDraft[],
@@ -378,6 +423,14 @@ export function useChatMessages(
       }
 
       await refreshMessages();
+
+      const mentionsAi =
+        mentions.some((mention) => mention.tipo === "ia") ||
+        /(^|\s)@ia\b/i.test(content);
+
+      if (mentionsAi && content.trim()) {
+        void requestAiReply(chatId);
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error
