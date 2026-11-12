@@ -19,7 +19,8 @@ import {
 } from "@/lib/tasks";
 import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
 import { supabase } from "@/lib/supabase";
-import type { Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
+import { listProjectParticipants } from "@/lib/projects";
+import type { ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 type ProjectTasksPanelProps = {
   projectId: string;
@@ -50,6 +51,8 @@ export default function ProjectTasksPanel({
     useState<TarefaPrioridade>("Media");
   const [statusInicial, setStatusInicial] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
+  const [responsibleId, setResponsibleId] = useState("");
   const [prazo, setPrazo] = useState("");
 
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] =
@@ -66,15 +69,19 @@ export default function ProjectTasksPanel({
         setLoading(true);
         setError("");
 
-        const [statusData, tarefasData] = await Promise.all([
+        const [statusData, tarefasData, participantsData] = await Promise.all([
           listarOuCriarStatus(projectId),
           listarTarefas(projectId),
+          listProjectParticipants(projectId),
         ]);
 
         if (!active) return;
 
         setStatus(statusData);
         setTarefas(tarefasData);
+        const eligibleParticipants = participantsData.filter((participant) => participant.role !== "viewer");
+        setParticipants(eligibleParticipants);
+        setResponsibleId(eligibleParticipants.find((participant) => participant.userId === currentUserId)?.userId ?? eligibleParticipants[0]?.userId ?? "");
 
         if (statusData.length > 0) {
           setStatusInicial(statusData[0].id_status);
@@ -122,6 +129,7 @@ export default function ProjectTasksPanel({
     setPrioridade("Media");
     setPrazo("");
     setError("");
+    setResponsibleId(currentUserId ?? participants[0]?.userId ?? "");
 
     if (status.length > 0) {
       setStatusInicial(status[0].id_status);
@@ -130,6 +138,7 @@ export default function ProjectTasksPanel({
 
   function openModal() {
     setError("");
+    setResponsibleId((current) => current || currentUserId || participants[0]?.userId || "");
 
     if (!statusInicial && status.length > 0) {
       setStatusInicial(status[0].id_status);
@@ -182,7 +191,7 @@ export default function ProjectTasksPanel({
       const novaTarefa = await criarTarefa({
         id_projeto: projectId,
         id_status: statusInicial,
-        id_usuario: currentUserId,
+        id_usuario: responsibleId || currentUserId,
         nome,
         descricao,
         prioridade,
@@ -813,6 +822,20 @@ export default function ProjectTasksPanel({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="project-task-responsible" className="mb-2 block text-sm font-medium text-foreground">
+                  Responsável
+                </label>
+                <select id="project-task-responsible" required value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary">
+                  <option value="">Selecione o responsável</option>
+                  {participants.map((participant) => (
+                    <option key={participant.userId} value={participant.userId}>
+                      {participant.name}{participant.userId === currentUserId ? " (você)" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

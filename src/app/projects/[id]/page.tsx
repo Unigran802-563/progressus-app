@@ -1,5 +1,6 @@
 "use client";
 import ProjectTasksPanel from "@/components/projects/ProjectTasksPanel";
+import ProjectFilesPanel from "@/components/projects/ProjectFilesPanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -558,11 +559,7 @@ export default function ProjectDetailPage() {
               )}
 
               {activeTab === "files" && <Panel title="Arquivos" bodyClassName="p-0">
-                <EmptyState
-                  icon={<FileText className="size-5" aria-hidden="true" />}
-                  title="Nenhum arquivo enviado"
-                  description="O envio de documentos será integrado ao projeto posteriormente."
-                />
+                <ProjectFilesPanel projectId={project.id} disabled={Boolean(project.archivedAt)} />
               </Panel>}
 
               {activeTab === "activity" && <EmptyState icon={<CalendarClock className="size-5" aria-hidden="true" />} title="Nenhuma atividade registrada" description="As alterações e atividades do projeto aparecerão aqui." />}

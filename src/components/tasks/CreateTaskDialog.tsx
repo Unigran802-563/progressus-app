@@ -4,7 +4,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ClipboardPlus, Loader2, X } from 'lucide-react';
 
 import { criarTarefa, listarOuCriarStatus } from '@/lib/tasks';
-import type { TarefaPrioridade, TarefaStatus } from '@/types';
+import { listProjectParticipants } from '@/lib/projects';
+import type { ProjectParticipant, TarefaPrioridade, TarefaStatus } from '@/types';
 
 type CreateTaskDialogProps = {
   open: boolean;
@@ -25,6 +26,8 @@ export default function CreateTaskDialog({
 }: CreateTaskDialogProps) {
   const [statuses, setStatuses] = useState<TarefaStatus[]>([]);
   const [statusId, setStatusId] = useState('');
+  const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
+  const [responsibleId, setResponsibleId] = useState(userId);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TarefaPrioridade>('Media');
@@ -41,6 +44,8 @@ export default function CreateTaskDialog({
       setDueDate('');
       setStatuses([]);
       setStatusId('');
+      setParticipants([]);
+      setResponsibleId(userId);
       setError('');
       return;
     }
@@ -48,11 +53,13 @@ export default function CreateTaskDialog({
     let active = true;
     setLoadingStatuses(true);
     setError('');
-    void listarOuCriarStatus(projectId)
-      .then((items) => {
+    void Promise.all([listarOuCriarStatus(projectId), listProjectParticipants(projectId)])
+      .then(([items, projectParticipants]) => {
         if (!active) return;
         setStatuses(items);
         setStatusId(items[0]?.id_status ?? '');
+        setParticipants(projectParticipants.filter((participant) => participant.role !== 'viewer'));
+        setResponsibleId(projectParticipants.find((participant) => participant.userId === userId && participant.role !== 'viewer')?.userId ?? projectParticipants.find((participant) => participant.role !== 'viewer')?.userId ?? userId);
       })
       .catch((reason) => {
         if (active) setError(reason instanceof Error ? reason.message : 'Não foi possível carregar os status.');
@@ -83,7 +90,7 @@ export default function CreateTaskDialog({
       await criarTarefa({
         id_projeto: projectId,
         id_status: statusId,
-        id_usuario: userId,
+        id_usuario: responsibleId || userId,
         nome: name,
         descricao: description,
         prioridade: priority,
@@ -121,6 +128,7 @@ export default function CreateTaskDialog({
             <div className="space-y-2"><label htmlFor="task-status" className="text-sm font-medium text-foreground">Status inicial</label><select id="task-status" required value={statusId} onChange={(event) => setStatusId(event.target.value)} disabled={saving || loadingStatuses || statuses.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">{loadingStatuses ? 'Carregando...' : 'Selecione'}</option>{statuses.map((status) => <option key={status.id_status} value={status.id_status}>{status.nome}</option>)}</select></div>
             <div className="space-y-2"><label htmlFor="task-priority" className="text-sm font-medium text-foreground">Prioridade</label><select id="task-priority" value={priority} onChange={(event) => setPriority(event.target.value as TarefaPrioridade)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select></div>
           </div>
+          <div className="space-y-2"><label htmlFor="task-responsible" className="text-sm font-medium text-foreground">Responsável</label><select id="task-responsible" value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} disabled={saving || participants.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione</option>{participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select></div>
           <div className="space-y-2"><label htmlFor="task-due-date" className="text-sm font-medium text-foreground">Prazo <span className="text-muted-foreground">(opcional)</span></label><input id="task-due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div>
           {error && <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Cancelar</button><button type="submit" disabled={saving || loadingStatuses || !statusId} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60">{saving && <Loader2 className="size-4 animate-spin" />}{saving ? 'Criando...' : 'Criar tarefa'}</button></div>
