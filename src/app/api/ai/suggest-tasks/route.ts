@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
 
 type SuggestTasksBody = {
   projectId?: string;
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.interactions.create({
-      model: 'gemini-3.8-flash',
+      model: GEMINI_MODEL,
       input: [
         {
           type: 'user_input',

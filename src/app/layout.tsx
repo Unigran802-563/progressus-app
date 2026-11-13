@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   },
   description:
     'Progressus é uma plataforma web para gestão de projetos, tarefas, comunicação em equipe e acompanhamento de progresso.',
+  icons: {
+    icon: '/brand/progressus-logo.png',
+    shortcut: '/brand/progressus-logo.png',
+    apple: '/brand/progressus-logo.png',
+  },
 };
 
 type RootLayoutProps = Readonly<{

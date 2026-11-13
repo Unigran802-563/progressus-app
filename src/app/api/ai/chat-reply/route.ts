@@ -12,7 +12,7 @@ dns.setDefaultResultOrder('ipv4first');
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
 const GEMINI_TIMEOUT_MS = 30000;
 const HISTORY_LIMIT = 12;
 const MAX_MESSAGE_CHARS = 500;

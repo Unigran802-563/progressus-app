@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
 type ChatBody = { message?: string };
 
 export async function POST(request: NextRequest) {
@@ -35,7 +36,7 @@ ${JSON.stringify({ usuario: { id: authData.user.id, email: authData.user.email ?
 Pergunta do usuário:
 ${message}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(60000),

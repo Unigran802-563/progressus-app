@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
 
 export async function POST() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -10,7 +11,7 @@ export async function POST() {
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
