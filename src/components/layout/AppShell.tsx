@@ -29,6 +29,7 @@ import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import { createProject, listAccessibleProjects } from "@/lib/projects";
 import type { AccessibleProject, CreateProjectData } from "@/types";
+import { useProjectAccessSync } from "@/hooks/useProjectAccessSync";
 
 type AppShellProps = {
   children: ReactNode;
@@ -102,6 +103,7 @@ export default function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  useProjectAccessSync();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -135,6 +137,7 @@ export default function AppShell({
           const current = JSON.parse(window.localStorage.getItem(key) || "[]") as Array<Record<string, unknown>>;
           if (current.some((item) => item.id === message.id_mensagem)) return;
           const { data: chat } = await supabase.from("chat").select("tipo, id_projeto").eq("id_chat", message.id_chat).maybeSingle();
+          if (!active || !chat) return;
           const { data: senderRows } = chat?.tipo === "grupo" && chat.id_projeto
             ? await supabase.rpc("list_project_members", { p_project_id: chat.id_projeto })
             : await supabase.rpc("get_private_chat_user_names", { p_user_ids: [message.id_usuario] });
@@ -161,6 +164,15 @@ export default function AppShell({
       if (channel) void supabase.removeChannel(channel);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    const refreshProjects = (event: Event) => {
+      const projects = (event as CustomEvent<{ projects: AccessibleProject[] }>).detail?.projects;
+      if (projects) setGlobalProjects(projects);
+    };
+    window.addEventListener("progressus:project-access-checked", refreshProjects);
+    return () => window.removeEventListener("progressus:project-access-checked", refreshProjects);
+  }, []);
 
   useEffect(() => {
     if (!isCreateMenuOpen) return;

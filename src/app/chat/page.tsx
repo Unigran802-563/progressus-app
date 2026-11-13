@@ -112,6 +112,33 @@ function ChatContent() {
     };
   }, [router]);
 
+  useEffect(() => {
+    let active = true;
+    function refreshAccess(event: Event) {
+      const accessible = (event as CustomEvent<{ projects: AccessibleProject[] }>).detail?.projects;
+      if (!accessible) return;
+      const available = accessible.filter((project) => !project.archivedAt);
+      setProjects((current) => JSON.stringify(current) === JSON.stringify(available) ? current : available);
+      if (!selectedProjectId || selectedPrivateChatId) return;
+      if (!available.some((project) => project.id === selectedProjectId)) {
+        setChatId(null);
+        setParticipants([]);
+        setProjectName(null);
+        router.replace("/chat");
+        return;
+      }
+      void listProjectParticipants(selectedProjectId).then((members) => {
+        if (!active) return;
+        setParticipants(members.map((member) => ({ id_usuario: member.userId, nome: member.name, email: member.email, papel: member.role })));
+      }).catch(() => { /* Não descartar histórico durante falha transitória de rede. */ });
+    }
+    window.addEventListener("progressus:project-access-checked", refreshAccess);
+    return () => {
+      active = false;
+      window.removeEventListener("progressus:project-access-checked", refreshAccess);
+    };
+  }, [selectedProjectId, selectedPrivateChatId, router]);
+
   const refreshUnreadCounts = useCallback(async () => {
     if (!user) return;
 

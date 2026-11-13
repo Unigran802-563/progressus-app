@@ -80,9 +80,9 @@ export default function HomePage() {
     }
   }, []);
 
-  const loadTaskMetrics = useCallback(async () => {
+  const loadTaskMetrics = useCallback(async (showLoading = true) => {
     try {
-      setIsMetricsLoading(true);
+      if (showLoading) setIsMetricsLoading(true);
       setTaskMetrics(await obterMetricasTarefas());
     } catch (error) {
       console.error("Não foi possível carregar as métricas de tarefas.", error);
@@ -126,6 +126,17 @@ export default function HomePage() {
 
     window.addEventListener("progressus:tasks-changed", refreshMetrics);
     return () => window.removeEventListener("progressus:tasks-changed", refreshMetrics);
+  }, [loadTaskMetrics]);
+
+  useEffect(() => {
+    function refreshAccess(event: Event) {
+      const accessible = (event as CustomEvent<{ projects: Project[] }>).detail?.projects;
+      if (!accessible) return;
+      setProjects(accessible.filter((project) => !project.archivedAt));
+      void loadTaskMetrics(false);
+    }
+    window.addEventListener("progressus:project-access-checked", refreshAccess);
+    return () => window.removeEventListener("progressus:project-access-checked", refreshAccess);
   }, [loadTaskMetrics]);
 
   const userName = useMemo(() => {

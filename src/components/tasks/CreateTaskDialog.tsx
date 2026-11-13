@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { ClipboardPlus, Loader2, X } from 'lucide-react';
+import { useProjectParticipantsRefresh } from '@/hooks/useProjectParticipantsRefresh';
 
 import { criarTarefa, listarOuCriarStatus } from '@/lib/tasks';
 import { listProjectParticipants } from '@/lib/projects';
@@ -102,6 +103,11 @@ export default function CreateTaskDialog({
     setLoadedProjectId('');
     setError('');
   }
+
+  useProjectParticipantsRefresh(activeProjectId, open, (eligible) => {
+    setParticipants(eligible);
+    setResponsibleId((current) => eligible.some((member) => member.userId === current) ? current : '');
+  }, () => { if (projectId) onClose(); else changeProject(''); });
 
   const statusValid = statuses.some((status) => status.id_status === statusId);
   const responsibleValid = participants.some((participant) => participant.userId === responsibleId);

@@ -38,6 +38,32 @@ export default function NotificationsPage() {
 
   useEffect(() => { void supabase.auth.getSession().then(async ({ data }) => { if (!data.session) { router.replace('/auth/login'); return; } const current = data.session.user; setUser(current); try { const saved = localStorage.getItem(`progressus:read-notifications:${current.id}`); if (saved) setRead(JSON.parse(saved)); const chatSaved = localStorage.getItem(`progressus:chat-notifications:${current.id}`); if (chatSaved) setChatNotifications(JSON.parse(chatSaved)); const prefs = localStorage.getItem(`progressus:preferences:${current.id}`); if (prefs) { const parsed = JSON.parse(prefs); setPreferences({ overdue: parsed.overdue !== false, dueSoon: parsed.dueSoon !== false }); } setTasks(await listarMinhasTarefas(current.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível carregar as notificações.'); } finally { setLoading(false); } }); }, [router]);
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    function refreshChatNotifications() {
+      try {
+        const saved = localStorage.getItem(`progressus:chat-notifications:${user!.id}`);
+        setChatNotifications(saved ? JSON.parse(saved) : []);
+      } catch { /* Ignorar cache inválido sem bloquear a navegação. */ }
+    }
+    function refreshAccess() {
+      refreshChatNotifications();
+      void listarMinhasTarefas(user!.id).then((items) => {
+        if (active) setTasks(items);
+      }).catch(() => { /* RLS continua protegendo os dados durante uma falha de rede. */ });
+    }
+    window.addEventListener('progressus:project-access-checked', refreshAccess);
+    window.addEventListener('progressus:tasks-changed', refreshAccess);
+    window.addEventListener('progressus:notifications-changed', refreshChatNotifications);
+    return () => {
+      active = false;
+      window.removeEventListener('progressus:project-access-checked', refreshAccess);
+      window.removeEventListener('progressus:tasks-changed', refreshAccess);
+      window.removeEventListener('progressus:notifications-changed', refreshChatNotifications);
+    };
+  }, [user]);
+
   const notifications = useMemo(() => [...chatNotifications, ...buildNotifications(tasks, preferences)].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [chatNotifications, preferences, tasks]);
   const unread = notifications.filter((item) => !read.includes(item.id)).length;
   useEffect(() => {

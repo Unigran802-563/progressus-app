@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { hydrateTaskResponsibles } from '@/lib/task-responsibles';
 import {
   AtualizarTarefaData,
   CriarTarefaData,
@@ -114,7 +115,7 @@ export async function listarTarefas(idProjeto: string): Promise<Tarefa[]> {
     .eq('id_projeto', idProjeto)
     .order('created_at', { ascending: false });
   throwIfError(error);
-  return (data ?? []) as Tarefa[];
+  return hydrateTaskResponsibles((data ?? []) as Tarefa[]);
 }
 
 export async function listarMinhasTarefas(userId: string): Promise<MinhaTarefa[]> {
@@ -129,7 +130,7 @@ export async function listarMinhasTarefas(userId: string): Promise<MinhaTarefa[]
     .order('created_at', { ascending: false });
   throwIfError(error);
 
-  return ((data ?? []) as Array<Tarefa & {
+  const tasks = ((data ?? []) as Array<Tarefa & {
     projeto: { nome: string }[] | null;
     status: { nome: string }[] | null;
   }>).map((item) => ({
@@ -137,6 +138,7 @@ export async function listarMinhasTarefas(userId: string): Promise<MinhaTarefa[]
     projeto_nome: item.projeto?.[0]?.nome ?? 'Projeto sem nome',
     status_nome: item.status?.[0]?.nome ?? 'Sem status',
   }));
+  return hydrateTaskResponsibles(tasks);
 }
 
 export async function buscarTarefa(idTarefa: string): Promise<Tarefa | null> {
@@ -146,7 +148,8 @@ export async function buscarTarefa(idTarefa: string): Promise<Tarefa | null> {
     .eq('id_tarefa', idTarefa)
     .maybeSingle();
   throwIfError(error);
-  return data as Tarefa | null;
+  if (!data) return null;
+  return (await hydrateTaskResponsibles([data as Tarefa]))[0];
 }
 
 export async function criarTarefa(dados: CriarTarefaData): Promise<Tarefa> {

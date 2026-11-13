@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useProjectParticipantsRefresh } from "@/hooks/useProjectParticipantsRefresh";
 
 import {
   alterarStatusTarefa,
@@ -20,6 +21,7 @@ import {
 import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
 import { supabase } from "@/lib/supabase";
 import { listProjectParticipants } from "@/lib/projects";
+import { getTaskResponsibleName } from "@/lib/task-responsibles";
 import type { ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 type ProjectTasksPanelProps = {
@@ -64,9 +66,9 @@ export default function ProjectTasksPanel({
   useEffect(() => {
     let active = true;
 
-    async function loadTasks() {
+    async function loadTasks(showLoading = true) {
       try {
-        setLoading(true);
+        if (showLoading) setLoading(true);
         setError("");
 
         const [statusData, tarefasData, participantsData] = await Promise.all([
@@ -81,10 +83,15 @@ export default function ProjectTasksPanel({
         setTarefas(tarefasData);
         const eligibleParticipants = participantsData.filter((participant) => participant.role !== "viewer");
         setParticipants(eligibleParticipants);
-        setResponsibleId(eligibleParticipants.find((participant) => participant.userId === currentUserId)?.userId ?? eligibleParticipants[0]?.userId ?? "");
+        setResponsibleId((current) => {
+          if (eligibleParticipants.some((participant) => participant.userId === current)) return current;
+          // Só usar o padrão na carga inicial; a remoção exige uma nova escolha.
+          if (!showLoading) return "";
+          return eligibleParticipants.find((participant) => participant.userId === currentUserId)?.userId ?? eligibleParticipants[0]?.userId ?? "";
+        });
 
         if (statusData.length > 0) {
-          setStatusInicial(statusData[0].id_status);
+          setStatusInicial((current) => statusData.some((item) => item.id_status === current) ? current : statusData[0].id_status);
         }
       } catch (err) {
         if (!active) return;
@@ -102,11 +109,15 @@ export default function ProjectTasksPanel({
     }
 
     void loadTasks();
-
+    const refreshTasks = () => { void loadTasks(false); };
+    window.addEventListener("progressus:tasks-changed", refreshTasks);
+    window.addEventListener("progressus:project-access-checked", refreshTasks);
     return () => {
       active = false;
+      window.removeEventListener("progressus:tasks-changed", refreshTasks);
+      window.removeEventListener("progressus:project-access-checked", refreshTasks);
     };
-  }, [projectId]);
+  }, [projectId, currentUserId]);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -164,6 +175,11 @@ export default function ProjectTasksPanel({
     }
   }
 
+  useProjectParticipantsRefresh(projectId, isModalOpen && !disabled, (eligible) => {
+    setParticipants(eligible);
+    setResponsibleId((current) => eligible.some((member) => member.userId === current) ? current : '');
+  }, () => { setIsModalOpen(false); });
+
   const canCreateTask = Boolean(nome.trim() && statusInicial && responsibleId && currentUserId && !saving);
 
   async function handleCreateTask(
@@ -206,8 +222,8 @@ export default function ProjectTasksPanel({
       });
 
       setTarefas((currentTasks) => [
-        novaTarefa,
-        ...currentTasks,
+        { ...novaTarefa, responsavel_nome: participants.find((participant) => participant.userId === responsibleId)?.name },
+        ...currentTasks.filter((task) => task.id_tarefa !== novaTarefa.id_tarefa),
       ]);
 
       resetForm();
@@ -239,7 +255,7 @@ export default function ProjectTasksPanel({
       setTarefas((currentTasks) =>
         currentTasks.map((tarefa) =>
           tarefa.id_tarefa === tarefaAtualizada.id_tarefa
-            ? tarefaAtualizada
+            ? { ...tarefa, ...tarefaAtualizada }
             : tarefa,
         ),
       );
@@ -453,6 +469,7 @@ export default function ProjectTasksPanel({
                       </p>
                     )}
 
+                    <p className="mt-3 text-xs text-muted-foreground">Responsável: {getTaskResponsibleName(tarefa)}</p>
                     <div className="mt-4 border-t border-border pt-3">
                       <label
                         htmlFor={`status-kanban-${tarefa.id_tarefa}`}
@@ -524,6 +541,10 @@ export default function ProjectTasksPanel({
                   </th>
 
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Responsável
+                  </th>
+
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Ação
                   </th>
                 </tr>
@@ -556,6 +577,8 @@ export default function ProjectTasksPanel({
                         {tarefa.prioridade || "Media"}
                       </span>
                     </td>
+
+                    <td className="px-4 py-4 text-sm text-muted-foreground">{getTaskResponsibleName(tarefa)}</td>
 
                     <td className="px-4 py-4">
                       <select

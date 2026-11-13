@@ -103,6 +103,8 @@ export type Tarefa = {
   descricao: string | null;
   prioridade: TarefaPrioridade | string | null;
   prazo?: string | null;
+  responsavel_nome?: string;
+  responsavel_excluido?: boolean;
   created_at: string;
 };
 

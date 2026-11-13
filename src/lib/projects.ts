@@ -167,6 +167,19 @@ export async function listProjectParticipants(
   return ((data ?? []) as ProjectParticipantRow[]).map(mapProjectParticipant);
 }
 
+export async function removeProjectParticipant(projectId: string, userId: string): Promise<void> {
+  if (!projectId || !userId) throw new Error('Informe o projeto e o participante.');
+  const { error } = await supabase.rpc('remove_project_member', {
+    p_project_id: projectId,
+    p_user_id: userId,
+  });
+  if (error) throw new Error(error.message);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('progressus:project-members-changed', { detail: { projectId, userId } }));
+    window.dispatchEvent(new Event('progressus:tasks-changed'));
+  }
+}
+
 export async function createProject(
   input: CreateProjectData,
 ): Promise<Project> {

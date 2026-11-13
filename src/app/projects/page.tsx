@@ -152,6 +152,17 @@ export default function ProjectsPage() {
     };
   }, [loadProjects, router]);
 
+  useEffect(() => {
+    function refreshAccess(event: Event) {
+      const accessible = (event as CustomEvent<{ projects: AccessibleProject[] }>).detail?.projects;
+      if (!accessible) return;
+      setProjects(accessible);
+      setTaskProject((current) => current && accessible.some((item) => item.id === current.id) ? current : null);
+    }
+    window.addEventListener("progressus:project-access-checked", refreshAccess);
+    return () => window.removeEventListener("progressus:project-access-checked", refreshAccess);
+  }, []);
+
   const userName = useMemo(() => {
     const metadataName = user?.user_metadata?.nome || user?.user_metadata?.name;
 

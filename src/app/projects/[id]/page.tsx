@@ -1,7 +1,7 @@
 "use client";
 import ProjectTasksPanel from "@/components/projects/ProjectTasksPanel";
 import ProjectFilesPanel from "@/components/projects/ProjectFilesPanel";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -18,13 +18,15 @@ import {
   ShieldCheck,
   Target,
   TriangleAlert,
+  Trash2,
+  UserMinus,
   UserPlus,
   UsersRound,
-  X,
 } from "lucide-react";
 
 import EditProjectDialog from "@/components/projects/EditProjectDialog";
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
+import ProjectConfirmationDialog from "@/components/projects/ProjectConfirmationDialog";
 import ShareProjectDialog from "@/components/projects/ShareProjectDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, Panel } from "@/components/ui/progressus-ui";
@@ -35,6 +37,7 @@ import {
   getProjectMember,
   listProjectParticipants,
   moveProjectToTrash,
+  removeProjectParticipant,
   updateProject,
 } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
@@ -53,6 +56,10 @@ type ProjectTaskSummary = {
 };
 
 type ProjectTab = "overview" | "tasks" | "members" | "files" | "activity";
+
+type ProjectConfirmation =
+  | { action: "archive" | "trash" }
+  | { action: "remove-member"; participant: ProjectParticipant };
 
 function formatProjectDate(date: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -90,8 +97,10 @@ export default function ProjectDetailPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
-  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
+  const [confirmation, setConfirmation] = useState<ProjectConfirmation | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmationError, setConfirmationError] = useState("");
+  const confirmationPendingRef = useRef(false);
   const [notice, setNotice] = useState("");
 
   const loadProject = useCallback(
@@ -189,8 +198,11 @@ export default function ProjectDetailPage() {
     }
 
     window.addEventListener("progressus:tasks-changed", refreshProjectSummary);
-    return () =>
+    window.addEventListener("progressus:project-access-checked", refreshProjectSummary);
+    return () => {
       window.removeEventListener("progressus:tasks-changed", refreshProjectSummary);
+      window.removeEventListener("progressus:project-access-checked", refreshProjectSummary);
+    };
   }, [loadProject, user]);
 
   const userName = useMemo(() => {
@@ -220,33 +232,81 @@ export default function ProjectDetailPage() {
     showNotice("Projeto atualizado com sucesso.");
   }
 
-  async function handleArchiveProject() {
-    if (!project) return;
+  function openConfirmation(nextConfirmation: ProjectConfirmation) {
+    if (confirmationPendingRef.current) return;
+    setConfirmationError("");
+    setConfirmation(nextConfirmation);
+  }
 
+  function closeConfirmation() {
+    if (confirmationPendingRef.current) return;
+    setConfirmation(null);
+    setConfirmationError("");
+  }
+
+  async function handleArchiveProject() {
+    if (!project || !isOwner || confirmation?.action !== "archive" || confirmationPendingRef.current) return;
+
+    confirmationPendingRef.current = true;
+    setIsConfirming(true);
+    setConfirmationError("");
     try {
-      setIsArchiving(true);
       await archiveProject(project.id);
+      setConfirmation(null);
       router.replace("/projects");
     } catch (error) {
-      showNotice(
+      setConfirmationError(
         error instanceof Error
           ? error.message
           : "Não foi possível arquivar o projeto.",
       );
-      setIsArchiveDialogOpen(false);
     } finally {
-      setIsArchiving(false);
+      confirmationPendingRef.current = false;
+      setIsConfirming(false);
     }
   }
 
   async function handleMoveProjectToTrash() {
-    if (!project || !window.confirm(`Mover o projeto "${project.name}" para a lixeira? Ele poderá ser restaurado depois.`)) return;
+    if (!project || !isOwner || confirmation?.action !== "trash" || confirmationPendingRef.current) return;
 
+    confirmationPendingRef.current = true;
+    setIsConfirming(true);
+    setConfirmationError("");
     try {
       await moveProjectToTrash(project.id);
+      setConfirmation(null);
       router.replace("/projects");
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Não foi possível mover o projeto para a lixeira.");
+      setConfirmationError(error instanceof Error ? error.message : "Não foi possível mover o projeto para a lixeira.");
+    } finally {
+      confirmationPendingRef.current = false;
+      setIsConfirming(false);
+    }
+  }
+
+  async function handleRemoveProjectParticipant() {
+    if (!project || !user || !isOwner || confirmation?.action !== "remove-member" || confirmationPendingRef.current) return;
+
+    const participant = participants.find((item) => item.userId === confirmation.participant.userId);
+    if (!participant || participant.role === "owner" || participant.userId === user.id) {
+      setConfirmationError("Este participante não pode ser removido do projeto.");
+      return;
+    }
+
+    confirmationPendingRef.current = true;
+    setIsConfirming(true);
+    setConfirmationError("");
+    try {
+      await removeProjectParticipant(project.id, participant.userId);
+      setParticipants((current) => current.filter((item) => item.userId !== participant.userId));
+      await loadProject(user.id);
+      setConfirmation(null);
+      showNotice(`${participant.name} foi removido do projeto. Tarefas e mensagens foram preservadas.`);
+    } catch (error) {
+      setConfirmationError(error instanceof Error ? error.message : "Não foi possível remover o participante. Tente novamente.");
+    } finally {
+      confirmationPendingRef.current = false;
+      setIsConfirming(false);
     }
   }
 
@@ -369,7 +429,7 @@ export default function ProjectDetailPage() {
 
                       <button
                         type="button"
-                        onClick={() => setIsArchiveDialogOpen(true)}
+                        onClick={() => openConfirmation({ action: "archive" })}
                         className="inline-flex h-10 items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3.5 text-sm font-medium text-warning transition-colors hover:bg-warning/15"
                       >
                         <Archive className="size-4" aria-hidden="true" />
@@ -377,9 +437,10 @@ export default function ProjectDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleMoveProjectToTrash()}
+                        onClick={() => openConfirmation({ action: "trash" })}
                         className="inline-flex h-10 items-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3.5 text-sm font-medium text-danger transition-colors hover:bg-danger/15"
                       >
+                        <Trash2 className="size-4" aria-hidden="true" />
                         Excluir
                       </button>
                     </>
@@ -530,7 +591,7 @@ export default function ProjectDetailPage() {
                     {participants.map((participant) => (
                       <li
                         key={participant.userId}
-                        className="flex items-center gap-3 px-5 py-3.5"
+                        className="flex flex-wrap items-center gap-3 px-5 py-3.5 sm:flex-nowrap"
                       >
                         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary ring-1 ring-primary/25">
                           {participant.name.charAt(0).toUpperCase()}
@@ -563,6 +624,19 @@ export default function ProjectDetailPage() {
                         >
                           {getRoleLabel(participant.role)}
                         </span>
+
+                        {isOwner && participant.role !== "owner" && participant.userId !== user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => openConfirmation({ action: "remove-member", participant })}
+                            disabled={isConfirming}
+                            aria-label={`Remover ${participant.name} do projeto`}
+                            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-50 sm:ml-0"
+                          >
+                            <UserMinus className="size-3.5" aria-hidden="true" />
+                            Remover
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -605,84 +679,49 @@ export default function ProjectDetailPage() {
         onCreate={handleCreateProject}
       />
 
-      {isArchiveDialogOpen && project && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-          role="presentation"
-        >
-          <button
-            type="button"
-            aria-label="Cancelar arquivamento"
-            className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm"
-            onClick={
-              isArchiving ? undefined : () => setIsArchiveDialogOpen(false)
-            }
-          />
-
-          <section
-            className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="archive-project-title"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-warning/10 text-warning">
-                  <Archive className="size-5" aria-hidden="true" />
-                </span>
-
-                <div>
-                  <h2
-                    id="archive-project-title"
-                    className="font-display text-lg font-semibold text-foreground"
-                  >
-                    Arquivar projeto?
-                  </h2>
-
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    O projeto{" "}
-                    <strong className="text-foreground">{project.name}</strong>{" "}
-                    sairá da lista ativa. Seus dados não serão apagados.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsArchiveDialogOpen(false)}
-                disabled={isArchiving}
-                className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Fechar"
-              >
-                <X className="size-5" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setIsArchiveDialogOpen(false)}
-                disabled={isArchiving}
-                className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleArchiveProject()}
-                disabled={isArchiving}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-warning px-4 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isArchiving && (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                )}
-
-                {isArchiving ? "Arquivando..." : "Arquivar projeto"}
-              </button>
-            </div>
-          </section>
-        </div>
+      {project && (
+        <ProjectConfirmationDialog
+          open={confirmation !== null}
+          title={confirmation?.action === "remove-member" ? "Remover membro?" : confirmation?.action === "trash" ? "Mover projeto para a lixeira?" : "Arquivar projeto?"}
+          variant={confirmation?.action === "archive" ? "warning" : "danger"}
+          icon={confirmation?.action === "remove-member" ? <UserMinus className="size-5" aria-hidden="true" /> : confirmation?.action === "trash" ? <Trash2 className="size-5" aria-hidden="true" /> : <Archive className="size-5" aria-hidden="true" />}
+          description={confirmation?.action === "remove-member" ? (
+            <>
+              <p>
+                <strong className="text-foreground">{confirmation.participant.name}</strong>{" "}
+                perderá o acesso ao projeto{" "}
+                <strong className="text-foreground">{project.name}</strong>{" "}
+                e ao chat, arquivos e tarefas deste projeto.
+              </p>
+              <p>
+                As tarefas e mensagens serão preservadas. Nas tarefas atribuídas a esse membro,
+                o responsável aparecerá como <strong className="text-foreground">Usuário excluído</strong>.
+              </p>
+              <p>A conta do membro e suas outras conversas não serão apagadas.</p>
+            </>
+          ) : confirmation?.action === "trash" ? (
+            <p>
+              O projeto <strong className="text-foreground">{project.name}</strong>{" "}
+              será movido para a lixeira e poderá ser restaurado depois.
+              Seus dados não serão apagados permanentemente.
+            </p>
+          ) : (
+            <p>
+              O projeto <strong className="text-foreground">{project.name}</strong>{" "}
+              sairá da lista ativa. Seus dados não serão apagados.
+            </p>
+          )}
+          confirmLabel={confirmation?.action === "remove-member" ? "Remover membro" : confirmation?.action === "trash" ? "Mover para a lixeira" : "Arquivar projeto"}
+          pendingLabel={confirmation?.action === "remove-member" ? "Removendo..." : confirmation?.action === "trash" ? "Movendo..." : "Arquivando..."}
+          pending={isConfirming}
+          error={confirmationError}
+          onClose={closeConfirmation}
+          onConfirm={() => {
+            if (confirmation?.action === "remove-member") void handleRemoveProjectParticipant();
+            else if (confirmation?.action === "trash") void handleMoveProjectToTrash();
+            else if (confirmation?.action === "archive") void handleArchiveProject();
+          }}
+        />
       )}
 
       {notice && (
