@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import { createProject, listAccessibleProjects } from "@/lib/projects";
+import { searchGlobal, type GlobalSearchResult } from "@/lib/global-search";
 import type { AccessibleProject, CreateProjectData } from "@/types";
 import { useProjectAccessSync } from "@/hooks/useProjectAccessSync";
 
@@ -114,6 +115,10 @@ export default function AppShell({
   const [globalUserId, setGlobalUserId] = useState("");
   const [globalProjects, setGlobalProjects] = useState<AccessibleProject[]>([]);
   const [globalProjectsLoading, setGlobalProjectsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const readCount = () => setUnreadNotifications(Number(window.localStorage.getItem("progressus:unread-notifications") || 0));
@@ -195,6 +200,46 @@ export default function AppShell({
       });
     return () => { active = false; };
   }, [isCreateMenuOpen]);
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (term.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setSearchLoading(true);
+      void searchGlobal(term)
+        .then((results) => {
+          if (active) setSearchResults(results);
+        })
+        .catch(() => {
+          if (active) {
+            setSearchResults([]);
+            setNotice("Não foi possível realizar a busca agora.");
+          }
+        })
+        .finally(() => {
+          if (active) setSearchLoading(false);
+        });
+    }, 280);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [searchTerm]);
+
+  function handleSearchResult(result: GlobalSearchResult) {
+    setSearchTerm("");
+    setSearchOpen(false);
+    router.push(result.href);
+  }
+
+  function resultKindLabel(kind: GlobalSearchResult['kind']) {
+    return kind === 'project' ? 'Projeto' : kind === 'task' ? 'Tarefa' : 'Mensagem';
+  }
 
   function showUnavailableFeature() {
     setNotice(
@@ -375,10 +420,33 @@ export default function AppShell({
               />
               <input
                 type="search"
-                placeholder="Buscar projetos, tarefas e pessoas…"
+                value={searchTerm}
+                onChange={(event) => { setSearchTerm(event.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); }}
+                placeholder="Buscar projetos, tarefas e mensagens…"
                 aria-label="Busca global"
                 className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-4 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/80 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40 lg:max-w-md"
               />
+              {searchOpen && searchTerm.trim().length >= 2 && (
+                <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl shadow-black/30 lg:max-w-md">
+                  {searchLoading ? (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">Buscando...</div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">Nenhum projeto, tarefa ou mensagem encontrada.</div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto p-1.5">
+                      {searchResults.map((result) => (
+                        <button key={`${result.kind}-${result.id}`} type="button" onClick={() => handleSearchResult(result)} className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-accent">
+                          <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/12 text-primary"><Search className="size-3.5" aria-hidden="true" /></span>
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{result.title}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{result.meta || result.description}</span></span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">{resultKindLabel(result.kind)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
