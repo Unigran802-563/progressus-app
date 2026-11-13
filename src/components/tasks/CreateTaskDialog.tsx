@@ -73,6 +73,8 @@ export default function CreateTaskDialog({
     };
   }, [open, projectId]);
 
+  const canSubmit = Boolean(name.trim() && statusId && responsibleId && !saving && !loadingStatuses);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) {
@@ -80,7 +82,11 @@ export default function CreateTaskDialog({
       return;
     }
     if (!statusId) {
-      setError('Este projeto ainda não possui status para receber tarefas.');
+      setError('Selecione o status inicial da tarefa.');
+      return;
+    }
+    if (!responsibleId) {
+      setError('Selecione o responsável pela tarefa.');
       return;
     }
 
@@ -125,13 +131,13 @@ export default function CreateTaskDialog({
           <div className="space-y-2"><label htmlFor="task-name" className="text-sm font-medium text-foreground">Nome da tarefa <span className="text-danger">*</span></label><input id="task-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} autoFocus disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div>
           <div className="space-y-2"><label htmlFor="task-description" className="text-sm font-medium text-foreground">Descrição <span className="text-muted-foreground">(opcional)</span></label><textarea id="task-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} rows={3} disabled={saving} className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" /></div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2"><label htmlFor="task-status" className="text-sm font-medium text-foreground">Status inicial</label><select id="task-status" required value={statusId} onChange={(event) => setStatusId(event.target.value)} disabled={saving || loadingStatuses || statuses.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">{loadingStatuses ? 'Carregando...' : 'Selecione'}</option>{statuses.map((status) => <option key={status.id_status} value={status.id_status}>{status.nome}</option>)}</select></div>
+            <div className="space-y-2"><label htmlFor="task-status" className="text-sm font-medium text-foreground">Status inicial</label><select id="task-status" value={statusId} onChange={(event) => setStatusId(event.target.value)} disabled={saving || loadingStatuses || statuses.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">{loadingStatuses ? 'Carregando...' : 'Selecione'}</option>{statuses.map((status) => <option key={status.id_status} value={status.id_status}>{status.nome}</option>)}</select></div>
             <div className="space-y-2"><label htmlFor="task-priority" className="text-sm font-medium text-foreground">Prioridade</label><select id="task-priority" value={priority} onChange={(event) => setPriority(event.target.value as TarefaPrioridade)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select></div>
           </div>
           <div className="space-y-2"><label htmlFor="task-responsible" className="text-sm font-medium text-foreground">Responsável</label><select id="task-responsible" value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} disabled={saving || participants.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">Selecione</option>{participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select></div>
           <div className="space-y-2"><label htmlFor="task-due-date" className="text-sm font-medium text-foreground">Prazo <span className="text-muted-foreground">(opcional)</span></label><input id="task-due-date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div>
           {error && <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
-          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Cancelar</button><button type="submit" disabled={saving || loadingStatuses || !statusId} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60">{saving && <Loader2 className="size-4 animate-spin" />}{saving ? 'Criando...' : 'Criar tarefa'}</button></div>
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Cancelar</button><button type="submit" disabled={!canSubmit} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100">{saving && <Loader2 className="size-4 animate-spin" />}{saving ? 'Criando...' : 'Criar tarefa'}</button></div>
         </form>
       </section>
     </div>

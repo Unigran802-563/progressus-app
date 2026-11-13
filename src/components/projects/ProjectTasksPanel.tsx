@@ -164,6 +164,8 @@ export default function ProjectTasksPanel({
     }
   }
 
+  const canCreateTask = Boolean(nome.trim() && statusInicial && responsibleId && currentUserId && !saving);
+
   async function handleCreateTask(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -176,6 +178,11 @@ export default function ProjectTasksPanel({
 
     if (!statusInicial) {
       setError("Selecione o status inicial da tarefa.");
+      return;
+    }
+
+    if (!responsibleId) {
+      setError("Selecione o responsável pela tarefa.");
       return;
     }
 
@@ -750,7 +757,6 @@ export default function ProjectTasksPanel({
                   onChange={(event) => setNome(event.target.value)}
                   placeholder="Ex.: Finalizar introdução"
                   autoFocus
-                  required
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
                 />
               </div>
@@ -828,7 +834,7 @@ export default function ProjectTasksPanel({
                 <label htmlFor="project-task-responsible" className="mb-2 block text-sm font-medium text-foreground">
                   Responsável
                 </label>
-                <select id="project-task-responsible" required value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary">
+                <select id="project-task-responsible" value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary">
                   <option value="">Selecione o responsável</option>
                   {participants.map((participant) => (
                     <option key={participant.userId} value={participant.userId}>
@@ -867,8 +873,8 @@ export default function ProjectTasksPanel({
 
                 <button
                   type="submit"
-                  disabled={saving || !statusInicial}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!canCreateTask}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
                 >
                   {saving && (
                     <Loader2

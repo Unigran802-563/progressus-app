@@ -44,6 +44,8 @@ export default function NewProjectDialog({
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isSubmitting, onClose, open]);
 
+  const canSubmit = Boolean(name.trim() && !isSubmitting);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -181,8 +183,8 @@ export default function NewProjectDialog({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="glow-accent inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+              disabled={!canSubmit}
+              className="glow-accent inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:hover:translate-y-0"
             >
               {isSubmitting ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
