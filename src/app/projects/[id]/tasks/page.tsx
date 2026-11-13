@@ -1,178 +1,100 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import {
-  alterarStatusTarefa,
-  criarTarefa,
-  listarOuCriarStatus,
-  listarTarefas,
-} from '@/lib/tasks';
-import {
-  Tarefa,
-  TarefaPrioridade,
-  TarefaStatus,
-} from '@/types';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import ProjectTasksPanel from '@/components/projects/ProjectTasksPanel';
+import { useProjectAccessSync } from '@/hooks/useProjectAccessSync';
+import { getProject, getProjectMember } from '@/lib/projects';
+import { supabase } from '@/lib/supabase';
+import type { AccessibleProject, Project, ProjectRole } from '@/types';
 
 type TasksPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
+  params: Promise<{ id: string }>;
 };
 
 export default function TasksPage({ params }: TasksPageProps) {
+  const router = useRouter();
   const [projectId, setProjectId] = useState('');
-  const [tarefas, setTarefas] = useState<Tarefa[]>([]);
-  const [status, setStatus] = useState<TarefaStatus[]>([]);
-
+  const [project, setProject] = useState<Project | null>(null);
+  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [modalAberto, setModalAberto] = useState(false);
-
-  const [nome, setNome] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [prioridade, setPrioridade] =
-    useState<TarefaPrioridade>('Media');
-  const [statusInicial, setStatusInicial] = useState('');
+  // A rota alternativa mantém a mesma sincronização de acesso do AppShell.
+  useProjectAccessSync();
 
   useEffect(() => {
-    async function carregarDados() {
+    let active = true;
+    let request = 0;
+    let userId = '';
+    let id = '';
+
+    async function loadProject() {
+      if (!userId || !id) return;
+      const currentRequest = ++request;
       try {
-        const { id } = await params;
-
-        setProjectId(id);
-
-        const [statusData, tarefasData] = await Promise.all([
-          listarOuCriarStatus(id),
-          listarTarefas(id),
+        const [projectData, memberData] = await Promise.all([
+          getProject(id),
+          getProjectMember(id, userId),
         ]);
-
-        setStatus(statusData);
-        setTarefas(tarefasData);
-
-        if (statusData.length > 0) {
-          setStatusInicial(statusData[0].id_status);
+        if (!active || currentRequest !== request) return;
+        if (!projectData || !memberData) {
+          setProject(null);
+          setProjectRole(null);
+          setError('Este projeto não existe ou você não tem acesso a ele.');
+          return;
         }
+        setProject(projectData);
+        setProjectRole(memberData.role);
+        setError('');
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Não foi possível carregar as tarefas.'
-        );
+        if (!active || currentRequest !== request) return;
+        setProject(null);
+        setProjectRole(null);
+        setError(err instanceof Error ? err.message : 'Não foi possível carregar o projeto.');
       } finally {
+        if (active && currentRequest === request) setLoading(false);
+      }
+    }
+
+    async function initialize() {
+      try {
+        const [resolvedParams, { data, error: authError }] = await Promise.all([params, supabase.auth.getUser()]);
+        if (!active) return;
+        if (authError || !data.user) {
+          router.replace('/auth/login');
+          return;
+        }
+        id = resolvedParams.id;
+        userId = data.user.id;
+        setProjectId(id);
+        await loadProject();
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : 'Não foi possível carregar o projeto.');
         setLoading(false);
       }
     }
 
-    carregarDados();
-  }, [params]);
-
-  const tarefasPorStatus = useMemo(() => {
-    return status.map((coluna) => ({
-      ...coluna,
-      tarefas: tarefas.filter(
-        (tarefa) => tarefa.id_status === coluna.id_status
-      ),
-    }));
-  }, [status, tarefas]);
-
-  function limparFormulario() {
-    setNome('');
-    setDescricao('');
-    setPrioridade('Media');
-
-    if (status.length > 0) {
-      setStatusInicial(status[0].id_status);
-    }
-  }
-
-  function fecharModal() {
-    if (saving) return;
-
-    limparFormulario();
-    setModalAberto(false);
-    setError('');
-  }
-
-  function handleAlterarPrioridade(valor: string) {
-    if (
-      valor === 'Baixa' ||
-      valor === 'Media' ||
-      valor === 'Alta'
-    ) {
-      setPrioridade(valor);
-    }
-  }
-
-  async function handleCriarTarefa(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    if (!nome.trim() || !statusInicial) {
-      setError('Informe o nome da tarefa e o status inicial.');
-      return;
+    function refreshAccess(event: Event) {
+      const projects = (event as CustomEvent<{ projects: AccessibleProject[] }>).detail?.projects;
+      if (projects && id) {
+        const accessibleProject = projects.find((item) => item.id === id);
+        setProject(accessibleProject ?? null);
+        setProjectRole(accessibleProject?.myRole ?? null);
+        if (!accessibleProject) setError('Você não tem mais acesso a este projeto.');
+      }
+      void loadProject();
     }
 
-    try {
-      setSaving(true);
-      setError('');
-
-      const novaTarefa = await criarTarefa({
-        id_projeto: projectId,
-        id_status: statusInicial,
-        nome,
-        descricao,
-        prioridade,
-      });
-
-      setTarefas((tarefasAtuais) => [
-        novaTarefa,
-        ...tarefasAtuais,
-      ]);
-
-      limparFormulario();
-      setModalAberto(false);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível criar a tarefa.'
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleAlterarStatus(
-    idTarefa: string,
-    novoStatus: string
-  ) {
-    try {
-      setError('');
-
-      const tarefaAtualizada = await alterarStatusTarefa(
-        idTarefa,
-        novoStatus
-      );
-
-      setTarefas((tarefasAtuais) =>
-        tarefasAtuais.map((tarefa) =>
-          tarefa.id_tarefa === tarefaAtualizada.id_tarefa
-            ? tarefaAtualizada
-            : tarefa
-        )
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível alterar o status.'
-      );
-    }
-  }
+    void initialize();
+    window.addEventListener('progressus:project-access-checked', refreshAccess);
+    return () => {
+      active = false;
+      window.removeEventListener('progressus:project-access-checked', refreshAccess);
+    };
+  }, [params, router]);
 
   if (loading) {
     return (
@@ -187,287 +109,27 @@ export default function TasksPage({ params }: TasksPageProps) {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Link
-              href={`/projects/${projectId}`}
-              className="mb-3 inline-block text-sm text-zinc-400 transition hover:text-white"
-            >
+            <Link href={projectId ? `/projects/${projectId}` : '/projects'} className="mb-3 inline-block text-sm text-zinc-400 transition hover:text-white">
               ← Voltar para o projeto
             </Link>
-
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Tarefas do projeto
-            </h1>
-
-            <p className="mt-2 text-sm text-zinc-400">
-              Organize as atividades no quadro Kanban.
-            </p>
+            <h1 className="text-3xl font-semibold tracking-tight">Tarefas do projeto</h1>
+            <p className="mt-2 text-sm text-zinc-400">Organize as atividades no quadro Kanban.</p>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setError('');
-              setModalAberto(true);
-            }}
-            disabled={status.length === 0}
-            className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-medium transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + Nova tarefa
-          </button>
         </div>
 
-        {error && !modalAberto && (
-          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
-        {status.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-zinc-400">
-            Nenhum status foi encontrado para este projeto.
+        {error || !project ? (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300" role="alert">
+            {error || 'Projeto indisponível.'}
           </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {tarefasPorStatus.map((coluna) => (
-              <section
-                key={coluna.id_status}
-                className="min-h-[320px] rounded-2xl border border-white/10 bg-white/[0.03] p-4"
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="font-medium">{coluna.nome}</h2>
-
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-zinc-300">
-                    {coluna.tarefas.length}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {coluna.tarefas.map((tarefa) => (
-                    <article
-                      key={tarefa.id_tarefa}
-                      className="rounded-xl border border-white/10 bg-[#151821] p-4"
-                    >
-                      <h3 className="font-medium">{tarefa.nome}</h3>
-
-                      {tarefa.descricao && (
-                        <p className="mt-2 text-sm text-zinc-400">
-                          {tarefa.descricao}
-                        </p>
-                      )}
-
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <span className="text-xs text-zinc-500">
-                          Prioridade:{' '}
-                          {tarefa.prioridade || 'Media'}
-                        </span>
-
-                        <select
-                          value={tarefa.id_status ?? ''}
-                          onChange={(event) =>
-                            handleAlterarStatus(
-                              tarefa.id_tarefa,
-                              event.target.value
-                            )
-                          }
-                          className="max-w-[130px] rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-xs text-zinc-300 outline-none"
-                        >
-                          {status.map((opcao) => (
-                            <option
-                              key={opcao.id_status}
-                              value={opcao.id_status}
-                            >
-                              {opcao.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </article>
-                  ))}
-
-                  {coluna.tarefas.length === 0 && (
-                    <p className="py-10 text-center text-sm text-zinc-600">
-                      Nenhuma tarefa nesta coluna.
-                    </p>
-                  )}
-                </div>
-              </section>
-            ))}
-          </div>
+          <>
+            {project.archivedAt && <p className="mb-4 text-sm text-zinc-400">Projeto arquivado. As tarefas estão disponíveis somente para leitura.</p>}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
+              <ProjectTasksPanel projectId={project.id} disabled={Boolean(project.archivedAt) || projectRole === 'viewer' || !projectRole} />
+            </div>
+          </>
         )}
       </div>
-
-      {modalAberto && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              fecharModal();
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="nova-tarefa-titulo"
-            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#151821] p-6 shadow-2xl shadow-black/40"
-          >
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h2
-                  id="nova-tarefa-titulo"
-                  className="text-xl font-semibold"
-                >
-                  Nova tarefa
-                </h2>
-
-                <p className="mt-1 text-sm text-zinc-400">
-                  Cadastre uma atividade para este projeto.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={fecharModal}
-                disabled={saving}
-                aria-label="Fechar modal"
-                className="rounded-lg px-2 py-1 text-2xl leading-none text-zinc-400 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
-              >
-                ×
-              </button>
-            </div>
-
-            {error && (
-              <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {error}
-              </div>
-            )}
-
-            <form
-              onSubmit={handleCriarTarefa}
-              className="space-y-4"
-            >
-              <div>
-                <label
-                  htmlFor="nome-tarefa"
-                  className="mb-2 block text-sm font-medium text-zinc-200"
-                >
-                  Nome da tarefa
-                </label>
-
-                <input
-                  id="nome-tarefa"
-                  value={nome}
-                  onChange={(event) =>
-                    setNome(event.target.value)
-                  }
-                  placeholder="Ex.: Finalizar introdução"
-                  autoFocus
-                  required
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-zinc-500 focus:border-violet-400"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="descricao-tarefa"
-                  className="mb-2 block text-sm font-medium text-zinc-200"
-                >
-                  Descrição
-                </label>
-
-                <textarea
-                  id="descricao-tarefa"
-                  value={descricao}
-                  onChange={(event) =>
-                    setDescricao(event.target.value)
-                  }
-                  placeholder="Descreva a atividade, se necessário"
-                  rows={4}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none placeholder:text-zinc-500 focus:border-violet-400"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="prioridade-tarefa"
-                    className="mb-2 block text-sm font-medium text-zinc-200"
-                  >
-                    Prioridade
-                  </label>
-
-                  <select
-                    id="prioridade-tarefa"
-                    value={prioridade}
-                    onChange={(event) =>
-                      handleAlterarPrioridade(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-white/10 bg-[#101218] px-4 py-3 text-sm outline-none focus:border-violet-400"
-                  >
-                    <option value="Baixa">
-                      Baixa prioridade
-                    </option>
-                    <option value="Media">
-                      Média prioridade
-                    </option>
-                    <option value="Alta">
-                      Alta prioridade
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="status-tarefa"
-                    className="mb-2 block text-sm font-medium text-zinc-200"
-                  >
-                    Status inicial
-                  </label>
-
-                  <select
-                    id="status-tarefa"
-                    value={statusInicial}
-                    onChange={(event) =>
-                      setStatusInicial(event.target.value)
-                    }
-                    className="w-full rounded-xl border border-white/10 bg-[#101218] px-4 py-3 text-sm outline-none focus:border-violet-400"
-                  >
-                    {status.map((coluna) => (
-                      <option
-                        key={coluna.id_status}
-                        value={coluna.id_status}
-                      >
-                        {coluna.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 border-t border-white/10 pt-5">
-                <button
-                  type="button"
-                  onClick={fecharModal}
-                  disabled={saving}
-                  className="rounded-xl border border-white/10 px-5 py-3 text-sm text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving || !statusInicial}
-                  className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-medium transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {saving ? 'Criando...' : 'Criar tarefa'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

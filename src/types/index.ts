@@ -99,6 +99,7 @@ export type Tarefa = {
   id_projeto: string;
   id_status: string | null;
   id_usuario?: string | null;
+  id_criador?: string | null;
   nome: string;
   descricao: string | null;
   prioridade: TarefaPrioridade | string | null;

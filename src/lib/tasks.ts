@@ -11,11 +11,18 @@ function throwIfError(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
+type NamedRelation = { nome: string } | { nome: string }[] | null;
+
+function relatedName(relation: NamedRelation | undefined): string | undefined {
+  return Array.isArray(relation) ? relation[0]?.nome : relation?.nome;
+}
+
 const tarefaSelect = `
   id_tarefa,
   id_projeto,
   id_status,
   id_usuario,
+  id_criador,
   nome,
   descricao,
   prioridade,
@@ -59,12 +66,12 @@ export async function obterMetricasTarefas(): Promise<TaskMetrics> {
   const rows = (data ?? []) as Array<{
     id_status: string | null;
     prazo: string | null;
-    status: { nome: string }[] | null;
+    status: NamedRelation;
   }>;
   const metrics: TaskMetrics = { abertas: 0, emProgresso: 0, concluidas: 0, atrasadas: 0 };
 
   for (const row of rows) {
-    const statusName = row.status?.[0]?.nome?.toLocaleLowerCase('pt-BR') ?? '';
+    const statusName = relatedName(row.status)?.toLocaleLowerCase('pt-BR') ?? '';
     const concluida = statusName.includes('concl');
     const emProgresso = statusName.includes('andamento') || statusName.includes('progresso');
     if (concluida) {
@@ -118,25 +125,28 @@ export async function listarTarefas(idProjeto: string): Promise<Tarefa[]> {
   return hydrateTaskResponsibles((data ?? []) as Tarefa[]);
 }
 
-export async function listarMinhasTarefas(userId: string): Promise<MinhaTarefa[]> {
-  const { data, error } = await supabase
+export async function listarMinhasTarefas(userId: string, options: { includeCreated?: boolean } = {}): Promise<MinhaTarefa[]> {
+  const query = supabase
     .from('tarefa')
     .select(`
-      id_tarefa, id_projeto, id_status, id_usuario, nome, descricao, prioridade, prazo, created_at,
+      id_tarefa, id_projeto, id_status, id_usuario, id_criador, nome, descricao, prioridade, prazo, created_at,
       projeto:id_projeto (nome), status:id_status (nome)
-    `)
-    .eq('id_usuario', userId)
+    `);
+  const scopedQuery = options.includeCreated
+    ? query.or(`id_usuario.eq.${userId},id_criador.eq.${userId}`)
+    : query.eq('id_usuario', userId);
+  const { data, error } = await scopedQuery
     .order('prazo', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
   throwIfError(error);
 
   const tasks = ((data ?? []) as Array<Tarefa & {
-    projeto: { nome: string }[] | null;
-    status: { nome: string }[] | null;
+    projeto: NamedRelation;
+    status: NamedRelation;
   }>).map((item) => ({
     ...item,
-    projeto_nome: item.projeto?.[0]?.nome ?? 'Projeto sem nome',
-    status_nome: item.status?.[0]?.nome ?? 'Sem status',
+    projeto_nome: relatedName(item.projeto) ?? 'Projeto sem nome',
+    status_nome: relatedName(item.status) ?? 'Sem status',
   }));
   return hydrateTaskResponsibles(tasks);
 }
@@ -175,9 +185,15 @@ export async function atualizarTarefa(idTarefa: string, dados: AtualizarTarefaDa
   const payload: Record<string, unknown> = {};
   if (dados.id_status !== undefined) payload.id_status = dados.id_status;
   if (dados.id_usuario !== undefined) payload.id_usuario = dados.id_usuario;
-  if (dados.nome !== undefined) payload.nome = dados.nome.trim();
+  if (dados.nome !== undefined) {
+    if (!dados.nome.trim()) throw new Error('Informe o nome da tarefa.');
+    payload.nome = dados.nome.trim();
+  }
   if (dados.descricao !== undefined) payload.descricao = dados.descricao.trim() || null;
-  if (dados.prioridade !== undefined) payload.prioridade = dados.prioridade;
+  if (dados.prioridade !== undefined) {
+    if (!['Baixa', 'Media', 'Alta'].includes(dados.prioridade)) throw new Error('Selecione uma prioridade válida.');
+    payload.prioridade = dados.prioridade;
+  }
   if (dados.prazo !== undefined) payload.prazo = dados.prazo;
 
   const { data, error } = await supabase
@@ -186,6 +202,9 @@ export async function atualizarTarefa(idTarefa: string, dados: AtualizarTarefaDa
     .eq('id_tarefa', idTarefa)
     .select(tarefaSelect)
     .single();
+  if (error?.code === 'PGRST116' || error?.code === '42501') {
+    throw new Error('Não foi possível salvar: a tarefa não está disponível ou você não tem permissão para editá-la.');
+  }
   throwIfError(error);
   notifyTasksChanged();
   return data as Tarefa;

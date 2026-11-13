@@ -1,28 +1,32 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ClipboardList,
   KanbanSquare,
   List,
   Loader2,
+  PencilLine,
   Plus,
   Sparkles,
   X,
 } from "lucide-react";
 import { useProjectParticipantsRefresh } from "@/hooks/useProjectParticipantsRefresh";
+import EditTaskDialog from "@/components/tasks/EditTaskDialog";
 
 import {
   alterarStatusTarefa,
   criarTarefa,
   listarOuCriarStatus,
+  listarStatus,
   listarTarefas,
 } from "@/lib/tasks";
 import { sugerirTarefasComIA, type SuggestedTask } from "@/lib/ai";
 import { supabase } from "@/lib/supabase";
-import { listProjectParticipants } from "@/lib/projects";
+import { getProject, listProjectParticipants } from "@/lib/projects";
+import { canEditTask } from "@/lib/task-permissions";
 import { getTaskResponsibleName } from "@/lib/task-responsibles";
-import type { ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
+import type { ProjectParticipant, ProjectRole, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 type ProjectTasksPanelProps = {
   projectId: string;
@@ -54,6 +58,9 @@ export default function ProjectTasksPanel({
   const [statusInicial, setStatusInicial] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
+  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
+  const [projectArchived, setProjectArchived] = useState(true);
+  const [editingTask, setEditingTask] = useState<Tarefa | null>(null);
   const [responsibleId, setResponsibleId] = useState("");
   const [prazo, setPrazo] = useState("");
 
@@ -63,24 +70,53 @@ export default function ProjectTasksPanel({
   const [suggesting, setSuggesting] = useState(false);
   const [aiError, setAiError] = useState("");
 
+  const projectReadOnly = disabled || projectArchived || (projectRole !== "owner" && projectRole !== "member");
+  const taskEditable = (task: Tarefa) => !projectReadOnly && canEditTask(task, currentUserId ?? "", projectRole);
+  const closeEditTask = useCallback(() => setEditingTask(null), []);
+  const handleTaskSaved = useCallback((updated: Tarefa) => {
+    setTarefas((current) => current.map((task) => task.id_tarefa === updated.id_tarefa ? { ...task, ...updated } : task));
+    setEditingTask(null);
+    // atualizarTarefa já emite progressus:tasks-changed para todas as telas.
+  }, []);
+
   useEffect(() => {
+    if (!currentUserId) return;
     let active = true;
+    let request = 0;
+    setProjectRole(null);
+    setProjectArchived(true);
+    setEditingTask(null);
 
     async function loadTasks(showLoading = true) {
+      const currentRequest = ++request;
       try {
         if (showLoading) setLoading(true);
         setError("");
 
-        const [statusData, tarefasData, participantsData] = await Promise.all([
-          listarOuCriarStatus(projectId),
+        const [projectData, tarefasData, participantsData] = await Promise.all([
+          getProject(projectId),
           listarTarefas(projectId),
           listProjectParticipants(projectId),
         ]);
+        const currentRole = participantsData.find((participant) => participant.userId === currentUserId)?.role ?? null;
+        if (!projectData || !currentRole) {
+          if (active && currentRequest === request) {
+            setProjectRole(null);
+            setProjectArchived(true);
+          }
+          throw new Error("Este projeto não existe ou você não tem acesso a ele.");
+        }
+        const statusData = await (projectData.archivedAt || currentRole === "viewer"
+          ? listarStatus(projectId)
+          : listarOuCriarStatus(projectId));
 
-        if (!active) return;
+        if (!active || currentRequest !== request) return;
 
         setStatus(statusData);
         setTarefas(tarefasData);
+        // Derivar o papel antes de excluir visualizadores dos responsáveis elegíveis.
+        setProjectRole(currentRole);
+        setProjectArchived(Boolean(projectData.archivedAt));
         const eligibleParticipants = participantsData.filter((participant) => participant.role !== "viewer");
         setParticipants(eligibleParticipants);
         setResponsibleId((current) => {
@@ -94,7 +130,9 @@ export default function ProjectTasksPanel({
           setStatusInicial((current) => statusData.some((item) => item.id_status === current) ? current : statusData[0].id_status);
         }
       } catch (err) {
-        if (!active) return;
+        if (!active || currentRequest !== request) return;
+        // Erro transitório não revoga o último vínculo confirmado. Os eventos
+        // de acesso e o banco continuam bloqueando membros realmente removidos.
 
         setError(
           err instanceof Error
@@ -102,7 +140,7 @@ export default function ProjectTasksPanel({
             : "Não foi possível carregar as tarefas.",
         );
       } finally {
-        if (active) {
+        if (active && currentRequest === request) {
           setLoading(false);
         }
       }
@@ -110,12 +148,26 @@ export default function ProjectTasksPanel({
 
     void loadTasks();
     const refreshTasks = () => { void loadTasks(false); };
+    const refreshAccess = (event: Event) => {
+      const projects = (event as CustomEvent<{ projects: import("@/types").AccessibleProject[] }>).detail?.projects;
+      if (projects) {
+        const project = projects.find((item) => item.id === projectId);
+        setProjectRole(project?.myRole ?? null);
+        setProjectArchived(!project || Boolean(project.archivedAt));
+        if (!project) {
+          setTarefas([]);
+          setStatus([]);
+          setParticipants([]);
+        }
+      }
+      refreshTasks();
+    };
     window.addEventListener("progressus:tasks-changed", refreshTasks);
-    window.addEventListener("progressus:project-access-checked", refreshTasks);
+    window.addEventListener("progressus:project-access-checked", refreshAccess);
     return () => {
       active = false;
       window.removeEventListener("progressus:tasks-changed", refreshTasks);
-      window.removeEventListener("progressus:project-access-checked", refreshTasks);
+      window.removeEventListener("progressus:project-access-checked", refreshAccess);
     };
   }, [projectId, currentUserId]);
 
@@ -148,6 +200,7 @@ export default function ProjectTasksPanel({
   }
 
   function openModal() {
+    if (projectReadOnly) return;
     setError("");
     setResponsibleId((current) => current || currentUserId || participants[0]?.userId || "");
 
@@ -175,17 +228,18 @@ export default function ProjectTasksPanel({
     }
   }
 
-  useProjectParticipantsRefresh(projectId, isModalOpen && !disabled, (eligible) => {
+  useProjectParticipantsRefresh(projectId, isModalOpen && !projectReadOnly, (eligible) => {
     setParticipants(eligible);
     setResponsibleId((current) => eligible.some((member) => member.userId === current) ? current : '');
   }, () => { setIsModalOpen(false); });
 
-  const canCreateTask = Boolean(nome.trim() && statusInicial && responsibleId && currentUserId && !saving);
+  const canCreateTask = Boolean(nome.trim() && statusInicial && responsibleId && currentUserId && !saving && !projectReadOnly);
 
   async function handleCreateTask(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+    if (projectReadOnly || saving) return;
 
     if (!nome.trim()) {
       setError("Informe o nome da tarefa.");
@@ -243,6 +297,8 @@ export default function ProjectTasksPanel({
     idTarefa: string,
     novoStatus: string,
   ) {
+    const task = tarefas.find((item) => item.id_tarefa === idTarefa);
+    if (!task || !taskEditable(task) || updatingTaskId) return;
     try {
       setUpdatingTaskId(idTarefa);
       setError("");
@@ -271,6 +327,7 @@ export default function ProjectTasksPanel({
   }
 
   async function handleSuggestTasks() {
+    if (projectReadOnly) return;
     try {
       setSuggesting(true);
       setAiError("");
@@ -363,7 +420,7 @@ export default function ProjectTasksPanel({
           <button
             type="button"
             onClick={() => void handleSuggestTasks()}
-            disabled={disabled || suggesting}
+            disabled={projectReadOnly || suggesting}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {suggesting ? (
@@ -414,7 +471,7 @@ export default function ProjectTasksPanel({
           <button
             type="button"
             onClick={openModal}
-            disabled={disabled}
+            disabled={projectReadOnly}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus
@@ -470,6 +527,11 @@ export default function ProjectTasksPanel({
                     )}
 
                     <p className="mt-3 text-xs text-muted-foreground">Responsável: {getTaskResponsibleName(tarefa)}</p>
+                    {taskEditable(tarefa) && (
+                      <button type="button" onClick={() => setEditingTask(tarefa)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/10" aria-label={`Editar tarefa ${tarefa.nome}`}>
+                        <PencilLine className="size-3.5" aria-hidden="true" />Editar
+                      </button>
+                    )}
                     <div className="mt-4 border-t border-border pt-3">
                       <label
                         htmlFor={`status-kanban-${tarefa.id_tarefa}`}
@@ -482,7 +544,7 @@ export default function ProjectTasksPanel({
                         id={`status-kanban-${tarefa.id_tarefa}`}
                         value={tarefa.id_status ?? ""}
                         disabled={
-                          disabled ||
+                          !taskEditable(tarefa) ||
                           updatingTaskId === tarefa.id_tarefa
                         }
                         onChange={(event) =>
@@ -581,10 +643,15 @@ export default function ProjectTasksPanel({
                     <td className="px-4 py-4 text-sm text-muted-foreground">{getTaskResponsibleName(tarefa)}</td>
 
                     <td className="px-4 py-4">
+                      {taskEditable(tarefa) && (
+                        <button type="button" onClick={() => setEditingTask(tarefa)} className="mr-2 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs font-medium text-primary hover:bg-primary/10" aria-label={`Editar tarefa ${tarefa.nome}`}>
+                          <PencilLine className="size-3.5" aria-hidden="true" />Editar
+                        </button>
+                      )}
                       <select
                         value={tarefa.id_status ?? ""}
                         disabled={
-                          disabled ||
+                          !taskEditable(tarefa) ||
                           updatingTaskId === tarefa.id_tarefa
                         }
                         onChange={(event) =>
@@ -613,6 +680,8 @@ export default function ProjectTasksPanel({
           )}
         </div>
       )}
+
+      <EditTaskDialog open={Boolean(editingTask)} task={editingTask} userId={currentUserId ?? ""} onClose={closeEditTask} onSaved={handleTaskSaved} />
 
       {isSuggestionModalOpen && (
         <div
