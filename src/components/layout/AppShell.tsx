@@ -35,7 +35,7 @@ type AppShellProps = {
   userName: string;
   userInitial: string;
   onLogout: () => Promise<void> | void;
-  onOpenNewProject?: () => void;
+  onOpenNewTask?: () => void;
   createLabel?: string;
 };
 
@@ -97,7 +97,7 @@ export default function AppShell({
   userName,
   userInitial,
   onLogout,
-  onOpenNewProject,
+  onOpenNewTask,
   createLabel = "Novo projeto",
 }: AppShellProps) {
   const pathname = usePathname();
@@ -189,8 +189,8 @@ export default function AppShell({
   function handleOpenNewTask() {
     setIsCreateMenuOpen(false);
 
-    if (onOpenNewProject) {
-      onOpenNewProject();
+    if (onOpenNewTask) {
+      onOpenNewTask();
       return;
     }
 

@@ -685,7 +685,7 @@ export default function ProjectTasksPanel({
 
       {isModalOpen && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-4 backdrop-blur-sm sm:items-center sm:py-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               closeModal();
@@ -696,7 +696,7 @@ export default function ProjectTasksPanel({
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-task-title"
-            className="w-full max-w-lg rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
+            className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-5 shadow-2xl shadow-black/50 sm:max-h-[calc(100dvh-3rem)] sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>

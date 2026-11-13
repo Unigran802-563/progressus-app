@@ -198,7 +198,6 @@ export default function HomePage() {
       userName={userName}
       userInitial={userInitial}
       onLogout={handleLogout}
-      onOpenNewProject={() => setIsNewProjectDialogOpen(true)}
     >
       <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

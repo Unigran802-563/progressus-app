@@ -265,7 +265,6 @@ export default function ProjectDetailPage() {
       userName={userName}
       userInitial={userInitial}
       onLogout={handleLogout}
-      onOpenNewProject={() => setIsNewProjectDialogOpen(true)}
     >
       <div className="mx-auto flex max-w-[1400px] flex-col gap-6">
         <Link
