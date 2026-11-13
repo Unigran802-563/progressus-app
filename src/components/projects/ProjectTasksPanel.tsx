@@ -78,6 +78,11 @@ export default function ProjectTasksPanel({
     setEditingTask(null);
     // atualizarTarefa já emite progressus:tasks-changed para todas as telas.
   }, []);
+  const handleTaskDeleted = useCallback((taskId: string) => {
+    setTarefas((current) => current.filter((task) => task.id_tarefa !== taskId));
+    setEditingTask(null);
+    // excluirTarefa já emite progressus:tasks-changed para todas as telas.
+  }, []);
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -681,7 +686,7 @@ export default function ProjectTasksPanel({
         </div>
       )}
 
-      <EditTaskDialog open={Boolean(editingTask)} task={editingTask} userId={currentUserId ?? ""} onClose={closeEditTask} onSaved={handleTaskSaved} />
+      <EditTaskDialog open={Boolean(editingTask)} task={editingTask} userId={currentUserId ?? ""} onClose={closeEditTask} onSaved={handleTaskSaved} onDeleted={handleTaskDeleted} />
 
       {isSuggestionModalOpen && (
         <div

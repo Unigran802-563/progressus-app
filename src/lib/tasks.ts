@@ -215,7 +215,16 @@ export async function alterarStatusTarefa(idTarefa: string, idStatus: string): P
 }
 
 export async function excluirTarefa(idTarefa: string): Promise<void> {
-  const { error } = await supabase.from('tarefa').delete().eq('id_tarefa', idTarefa);
+  const { data, error } = await supabase
+    .from('tarefa')
+    .delete()
+    .eq('id_tarefa', idTarefa)
+    .select('id_tarefa')
+    .maybeSingle();
+  if (error?.code === '42501' || error?.code === 'PGRST116') {
+    throw new Error('Não foi possível excluir: a tarefa não está disponível ou você não tem permissão para excluí-la.');
+  }
   throwIfError(error);
+  if (!data) throw new Error('Não foi possível excluir: a tarefa não está disponível ou você não tem permissão para excluí-la.');
   notifyTasksChanged();
 }

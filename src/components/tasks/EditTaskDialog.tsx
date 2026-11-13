@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { Loader2, PencilLine, ShieldAlert, X } from 'lucide-react';
+import { Loader2, PencilLine, ShieldAlert, Trash2, X } from 'lucide-react';
 import { useProjectParticipantsRefresh } from '@/hooks/useProjectParticipantsRefresh';
 import { getProject, getProjectMember, listAccessibleProjects, listProjectParticipants } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 import { canEditTask } from '@/lib/task-permissions';
-import { atualizarTarefa, buscarTarefa, listarStatus } from '@/lib/tasks';
+import { atualizarTarefa, buscarTarefa, excluirTarefa, listarStatus } from '@/lib/tasks';
 import type { AtualizarTarefaData, Project, ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from '@/types';
 
 type EditTaskDialogProps = {
@@ -15,6 +15,7 @@ type EditTaskDialogProps = {
   userId: string;
   onClose: () => void;
   onSaved?: (updated: Tarefa) => void;
+  onDeleted?: (taskId: string) => void;
 };
 
 type TaskContext = {
@@ -79,7 +80,7 @@ async function readTaskContext(taskId: string, userId: string): Promise<TaskCont
   };
 }
 
-export default function EditTaskDialog({ open, task, userId, onClose, onSaved }: EditTaskDialogProps) {
+export default function EditTaskDialog({ open, task, userId, onClose, onSaved, onDeleted }: EditTaskDialogProps) {
   const id = useId();
   const taskId = task?.id_tarefa ?? '';
   const [context, setContext] = useState<TaskContext | null>(null);
@@ -92,6 +93,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
   const [accessWarning, setAccessWarning] = useState('');
   const dialogRef = useRef<HTMLElement>(null);
@@ -102,8 +105,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
   const saveRef = useRef<object | null>(null);
   const refreshRef = useRef<() => void>(() => {});
   const revokeRef = useRef<() => void>(() => {});
-  const callbacksRef = useRef({ open, taskId, userId, onClose, onSaved });
-  callbacksRef.current = { open, taskId, userId, onClose, onSaved };
+  const callbacksRef = useRef({ open, taskId, userId, onClose, onSaved, onDeleted });
+  callbacksRef.current = { open, taskId, userId, onClose, onSaved, onDeleted };
 
   useEffect(() => {
     const generation = ++generationRef.current;
@@ -122,6 +125,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
     setError('');
     setAccessWarning('');
     setSaving(false);
+    setDeleting(false);
+    setConfirmDelete(false);
     setChecking(false);
     setLoading(Boolean(open && taskId));
 
@@ -207,7 +212,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
 
   const currentContext = context?.task.id_tarefa === taskId && context.userId === userId ? context : null;
   const editable = Boolean(open && currentContext && !loading && !accessWarning);
-  const busy = loading || checking || saving;
+  const busy = loading || checking || saving || deleting;
 
   useProjectParticipantsRefresh(currentContext?.project.id ?? '', open && Boolean(currentContext), () => {
     // O evento é um sinal de refresh, não uma autorização; reconsultar tarefa, sessão e papel.
@@ -359,6 +364,41 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
     }
   }
 
+  async function handleDelete() {
+    if (saveRef.current || busy || !editable || !currentContext) return;
+    const token = {};
+    const generation = generationRef.current;
+    const original = currentContext.task;
+    saveRef.current = token;
+    setDeleting(true);
+    setError('');
+    const isCurrent = () => generationRef.current === generation && callbacksRef.current.open
+      && callbacksRef.current.taskId === original.id_tarefa && callbacksRef.current.userId === userId;
+    try {
+      const fresh = await readTaskContext(original.id_tarefa, userId);
+      if (!isCurrent()) return;
+      if (fresh.task.id_projeto !== original.id_projeto) {
+        throw new TaskAccessError('O vínculo desta tarefa mudou. Feche e abra a edição novamente.');
+      }
+      await excluirTarefa(original.id_tarefa);
+      if (!isCurrent()) return;
+      callbacksRef.current.onDeleted?.(original.id_tarefa);
+      callbacksRef.current.onClose();
+    } catch (reason) {
+      if (!isCurrent()) return;
+      if (reason instanceof TaskAccessError) setAccessWarning(reason.message);
+      else setError(reason instanceof Error && reason.message.includes('permiss')
+        ? 'Não foi possível excluir: você não tem permissão para excluir esta tarefa.'
+        : 'Não foi possível excluir a tarefa. Ela pode já ter sido removida ou estar indisponível.');
+      setConfirmDelete(false);
+    } finally {
+      if (saveRef.current === token) {
+        saveRef.current = null;
+        if (isCurrent()) setDeleting(false);
+      }
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -406,10 +446,24 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved }:
 
           {error && <p id={`${id}-error`} className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
           <p className="sr-only" role="status">{saving ? 'Salvando alterações...' : checking ? 'Verificando acesso...' : ''}</p>
-          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+          {confirmDelete && editable && currentContext && (
+            <div className="mt-5 rounded-xl border border-danger/30 bg-danger/10 p-4" role="alertdialog" aria-label="Confirmar exclusão da tarefa">
+              <p className="text-sm font-semibold text-foreground">Excluir esta tarefa?</p>
+              <p className="mt-1 text-sm text-muted-foreground">A tarefa <strong className="text-foreground">{currentContext.task.nome}</strong> será excluída permanentemente e não poderá ser recuperada.</p>
+              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy} className={`h-9 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>Cancelar</button>
+                <button type="button" onClick={() => void handleDelete()} disabled={busy} className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-danger px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>{deleting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{deleting ? 'Excluindo...' : 'Excluir tarefa'}</button>
+              </div>
+            </div>
+          )}
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            {editable && !confirmDelete && <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}><Trash2 className="size-4" aria-hidden="true" />Excluir tarefa</button>}
+            {!editable && <span />}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button ref={cancelRef} type="button" onClick={closeDialog} disabled={saving} className={`h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>Cancelar</button>
             {!editable && !busy && taskId && <button type="button" onClick={() => refreshRef.current()} className={`h-10 rounded-xl border border-border px-4 text-sm font-medium text-foreground hover:bg-muted ${focusClass}`}>Verificar novamente</button>}
-            {editable && <button type="submit" form={`${id}-form`} disabled={!canSubmit} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 ${focusClass}`}>{saving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{saving ? 'Salvando...' : 'Salvar alterações'}</button>}
+            {editable && !confirmDelete && <button type="submit" form={`${id}-form`} disabled={!canSubmit} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 ${focusClass}`}>{saving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{saving ? 'Salvando...' : 'Salvar alterações'}</button>}
+            </div>
           </div>
         </div>
       </section>
