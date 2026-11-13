@@ -163,16 +163,26 @@ export default function AppShell({
   }, [pathname]);
 
   useEffect(() => {
-    if (!isCreateMenuOpen || globalProjects.length > 0) return;
+    if (!isCreateMenuOpen) return;
+    let active = true;
     setGlobalProjectsLoading(true);
     void Promise.all([supabase.auth.getSession(), listAccessibleProjects()])
       .then(([sessionResult, projects]) => {
+        if (!active) return;
         setGlobalUserId(sessionResult.data.session?.user.id ?? "");
         setGlobalProjects(projects);
       })
-      .catch(() => setGlobalProjects([]))
-      .finally(() => setGlobalProjectsLoading(false));
-  }, [globalProjects.length, isCreateMenuOpen]);
+      .catch(() => {
+        if (!active) return;
+        setGlobalProjects([]);
+        setGlobalUserId("");
+        setNotice("Não foi possível carregar seus projetos. Abra o menu Criar para tentar novamente.");
+      })
+      .finally(() => {
+        if (active) setGlobalProjectsLoading(false);
+      });
+    return () => { active = false; };
+  }, [isCreateMenuOpen]);
 
   function showUnavailableFeature() {
     setNotice(
@@ -194,9 +204,8 @@ export default function AppShell({
       return;
     }
 
-    const firstEditable = globalProjects.find((project) => project.myRole !== "viewer");
-    if (!globalUserId || !firstEditable) {
-      showUnavailableFeature();
+    if (!globalUserId) {
+      setNotice("Não foi possível identificar sua sessão. Entre novamente para criar uma tarefa.");
       return;
     }
     setIsGlobalTaskOpen(true);
@@ -212,8 +221,6 @@ export default function AppShell({
     setIsGlobalProjectOpen(false);
     router.push(`/projects/${project.id}`);
   }
-
-  const globalTaskProject = globalProjects.find((project) => project.myRole !== "viewer");
 
   async function handleLogout() {
     setIsUserMenuOpen(false);
@@ -463,11 +470,10 @@ export default function AppShell({
         onClose={() => setIsGlobalProjectOpen(false)}
         onCreate={handleGlobalProjectCreate}
       />
-      {isGlobalTaskOpen && globalUserId && globalTaskProject && (
+      {isGlobalTaskOpen && globalUserId && (
         <CreateTaskDialog
           open
-          projectId={globalTaskProject.id}
-          projectName={globalTaskProject.name}
+          projects={globalProjects}
           userId={globalUserId}
           onClose={() => setIsGlobalTaskOpen(false)}
         />
