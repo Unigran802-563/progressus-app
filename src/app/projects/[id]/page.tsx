@@ -499,7 +499,7 @@ export default function ProjectDetailPage() {
             </section>
 
             <div className="surface-panel overflow-hidden">
-              <div className="flex gap-1 overflow-x-auto border-b border-border px-3 pt-2">
+              <div className="flex gap-1 overflow-x-auto border-b border-border px-2 pt-2">
                 {([
                   ["overview", "Visão geral"],
                   ["tasks", "Tarefas"],
@@ -531,7 +531,7 @@ export default function ProjectDetailPage() {
                         <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">Organização das tarefas</span><span className="mt-1 block text-xs text-muted-foreground">{taskSummary.total} cadastradas · {taskSummary.completed} concluídas</span></span>
                         <span className="text-xs font-medium text-primary">Abrir</span>
                       </button>
-                      <div className="grid grid-cols-3 gap-3 p-4">
+                      <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
                         <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 text-xl font-bold text-foreground">{taskSummary.total}</p></div>
                         <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Abertas</p><p className="mt-1 text-xl font-bold text-foreground">{taskSummary.open}</p></div>
                         <div className="rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Concluídas</p><p className="mt-1 text-xl font-bold text-success">{taskSummary.completed}</p></div>

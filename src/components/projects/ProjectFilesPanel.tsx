@@ -69,14 +69,14 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
 
   return (
     <div className="p-5">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-base font-semibold text-foreground">Arquivos do projeto</h3>
           <p className="mt-1 text-sm text-muted-foreground">Arquivos enviados aqui e anexados às mensagens do Chat.</p>
         </div>
         <>
           <input ref={inputRef} type="file" className="hidden" onChange={handleUpload} disabled={disabled || uploading} />
-          <button type="button" onClick={() => inputRef.current?.click()} disabled={disabled || uploading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={disabled || uploading} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
             {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
             {uploading ? 'Enviando...' : 'Enviar arquivo'}
           </button>

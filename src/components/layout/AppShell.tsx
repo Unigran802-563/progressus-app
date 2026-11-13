@@ -395,7 +395,7 @@ export default function AppShell({
             className="absolute inset-0 bg-background/80 backdrop-blur-sm"
             aria-label="Fechar menu"
           />
-          <aside className="relative h-full w-[280px] border-r border-border bg-sidebar shadow-2xl">
+          <aside className="relative h-full w-[min(280px,calc(100vw-2rem))] border-r border-border bg-sidebar shadow-2xl">
             <SidebarContent mobile />
           </aside>
         </div>

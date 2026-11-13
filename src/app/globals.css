@@ -74,11 +74,14 @@
 html {
   color-scheme: dark;
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   background-color: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
@@ -106,6 +109,14 @@ button {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+@media (max-width: 639px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 a {

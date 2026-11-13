@@ -428,13 +428,13 @@ function ChatContent() {
       userInitial={userInitial}
       onLogout={handleLogout}
     >
-      <main className="flex h-[calc(100vh-150px)] min-h-[420px] flex-col bg-background text-foreground">
-        <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface">
+      <main className="flex h-[calc(100dvh-150px)] min-h-[520px] flex-col bg-background text-foreground">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:flex-row">
           {/* Painel de conversas */}
           <aside
-            className={`flex shrink-0 flex-col border-r border-border transition-all duration-300 ${
-              isSidebarCollapsed ? "w-16" : "w-[280px]"
-            }`}
+            className={`flex min-h-0 shrink-0 flex-col border-b border-border transition-all duration-300 lg:border-b-0 lg:border-r ${
+              isSidebarCollapsed ? "w-full lg:w-16" : "w-full lg:w-[280px]"
+            } max-h-[46%] lg:max-h-none`}
           >
             {/* Cabeçalho */}
             <div
