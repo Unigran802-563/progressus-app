@@ -207,11 +207,11 @@ export default function HomePage() {
           />
           <button
             type="button"
-            onClick={() => setIsNewProjectDialogOpen(true)}
+            onClick={() => router.push("/tasks")}
             className="glow-accent inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
           >
             <Plus className="size-4" aria-hidden="true" />
-            Novo projeto
+            Nova tarefa
           </button>
         </div>
 
@@ -223,7 +223,13 @@ export default function HomePage() {
             const Icon = metric.icon;
 
             return (
-              <article key={metric.label} className="card-elevated p-5">
+              <button
+                key={metric.label}
+                type="button"
+                onClick={() => router.push("/tasks")}
+                aria-label={`Abrir Minhas tarefas: ${metric.label}`}
+                className="card-elevated w-full p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <span
                     className={`grid size-9 place-items-center rounded-xl ${metric.tone}`}
@@ -246,8 +252,8 @@ export default function HomePage() {
                           : taskMetrics.atrasadas}
                 </p>
                 <p className="text-sm text-muted-foreground">{metric.label}</p>
-                <p className="mt-2 text-[11px] text-muted-foreground/70">Atualizado a partir das tarefas do usuário</p>
-              </article>
+                <p className="mt-2 text-[11px] text-muted-foreground/70">Clique para abrir Minhas tarefas</p>
+              </button>
             );
           })}
         </section>
