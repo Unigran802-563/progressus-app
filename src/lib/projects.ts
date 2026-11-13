@@ -101,6 +101,16 @@ export async function listAccessibleProjects(
   return ((data ?? []) as AccessibleProjectRow[]).map(mapAccessibleProject);
 }
 
+export async function listTrashProjects(): Promise<AccessibleProject[]> {
+  const { data, error } = await supabase.rpc('list_trash_projects');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as AccessibleProjectRow[]).map(mapAccessibleProject);
+}
+
 export async function listProjects(
   options: ListProjectsOptions = {},
 ): Promise<Project[]> {
@@ -219,6 +229,42 @@ export async function updateProject(
 
 export async function archiveProject(projectId: string): Promise<Project> {
   const { data, error } = await supabase.rpc('archive_project', {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapProject(data as ProjectRow);
+}
+
+export async function restoreArchivedProject(projectId: string): Promise<Project> {
+  const { data, error } = await supabase.rpc('restore_archived_project', {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapProject(data as ProjectRow);
+}
+
+export async function moveProjectToTrash(projectId: string): Promise<Project> {
+  const { data, error } = await supabase.rpc('move_project_to_trash', {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return mapProject(data as ProjectRow);
+}
+
+export async function restoreProjectFromTrash(projectId: string): Promise<Project> {
+  const { data, error } = await supabase.rpc('restore_project_from_trash', {
     p_project_id: projectId,
   });
 

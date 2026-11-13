@@ -22,17 +22,19 @@ import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader } from "@/components/ui/progressus-ui";
-import { createProject, listAccessibleProjects } from "@/lib/projects";
+import { createProject, listAccessibleProjects, listTrashProjects, restoreArchivedProject, restoreProjectFromTrash } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import type { AccessibleProject, CreateProjectData } from "@/types";
 
 type ViewMode = "grid" | "list";
-type ProjectFilter = "all" | "owned" | "shared";
+type ProjectFilter = "all" | "owned" | "shared" | "archived" | "trash";
 
 const filterOptions: Array<{ id: ProjectFilter; label: string }> = [
   { id: "all", label: "Todos" },
   { id: "owned", label: "Meus projetos" },
   { id: "shared", label: "Compartilhados comigo" },
+  { id: "archived", label: "Arquivados" },
+  { id: "trash", label: "Lixeira" },
 ];
 
 function formatProjectDate(date: string): string {
@@ -91,6 +93,7 @@ export default function ProjectsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<AccessibleProject[]>([]);
+  const [trashProjects, setTrashProjects] = useState<AccessibleProject[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [projectError, setProjectError] = useState("");
@@ -105,7 +108,12 @@ export default function ProjectsPage() {
     try {
       setIsProjectsLoading(true);
       setProjectError("");
-      setProjects(await listAccessibleProjects());
+      const [allProjects, deletedProjects] = await Promise.all([
+        listAccessibleProjects({ includeArchived: true }),
+        listTrashProjects(),
+      ]);
+      setProjects(allProjects);
+      setTrashProjects(deletedProjects);
     } catch (error) {
       setProjectError(
         error instanceof Error
@@ -161,17 +169,29 @@ export default function ProjectsPage() {
     [projects],
   );
   const sharedProjects = useMemo(
-    () => projects.filter((project) => project.myRole !== "owner"),
+    () => projects.filter((project) => project.myRole !== "owner" && !project.archivedAt),
+    [projects],
+  );
+  const activeProjects = useMemo(
+    () => projects.filter((project) => !project.archivedAt),
+    [projects],
+  );
+  const archivedProjects = useMemo(
+    () => projects.filter((project) => Boolean(project.archivedAt)),
     [projects],
   );
 
   const visibleProjects = useMemo(() => {
     const sourceProjects =
       activeFilter === "owned"
-        ? ownProjects
+        ? ownProjects.filter((project) => !project.archivedAt)
         : activeFilter === "shared"
           ? sharedProjects
-          : projects;
+          : activeFilter === "archived"
+            ? archivedProjects
+            : activeFilter === "trash"
+              ? trashProjects
+              : activeProjects;
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase("pt-BR");
 
     if (!normalizedQuery) {
@@ -183,7 +203,7 @@ export default function ProjectsPage() {
 
       return searchableText.toLocaleLowerCase("pt-BR").includes(normalizedQuery);
     });
-  }, [activeFilter, ownProjects, projects, searchQuery, sharedProjects]);
+  }, [activeFilter, activeProjects, archivedProjects, ownProjects, projects, searchQuery, sharedProjects, trashProjects]);
 
   const projectsSubtitle = isProjectsLoading
     ? "Carregando seus projetos..."
@@ -199,6 +219,26 @@ export default function ProjectsPage() {
     await loadProjects();
     setIsNewProjectDialogOpen(false);
     showNotice("Projeto criado com sucesso.");
+  }
+
+  async function handleRestoreProject(project: AccessibleProject) {
+    try {
+      await restoreProjectFromTrash(project.id);
+      await loadProjects();
+      showNotice("Projeto restaurado com sucesso.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Não foi possível restaurar o projeto.");
+    }
+  }
+
+  async function handleRestoreArchivedProject(project: AccessibleProject) {
+    try {
+      await restoreArchivedProject(project.id);
+      await loadProjects();
+      showNotice("Projeto restaurado com sucesso.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Não foi possível restaurar o projeto arquivado.");
+    }
   }
 
   function openTaskDialog(project: AccessibleProject) {
@@ -266,12 +306,16 @@ export default function ProjectsPage() {
               aria-label="Categoria de projetos"
             >
               {filterOptions.map((filter) => {
-                const count =
-                  filter.id === "owned"
-                    ? ownProjects.length
-                    : filter.id === "shared"
-                      ? sharedProjects.length
-                      : projects.length;
+                  const count =
+                    filter.id === "owned"
+                      ? ownProjects.length
+                      : filter.id === "shared"
+                        ? sharedProjects.length
+                        : filter.id === "archived"
+                          ? archivedProjects.length
+                          : filter.id === "trash"
+                            ? trashProjects.length
+                            : activeProjects.length;
 
                 return (
                   <button
@@ -452,7 +496,15 @@ export default function ProjectsPage() {
                   </div>
                 </div>
                 </Link>
-                {project.myRole !== "viewer" && (
+                {activeFilter === "trash" ? (
+                  <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
+                    Restaurar projeto
+                  </button>
+                ) : activeFilter === "archived" && project.myRole === "owner" ? (
+                  <button type="button" onClick={() => void handleRestoreArchivedProject(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
+                    Restaurar projeto
+                  </button>
+                ) : project.myRole !== "viewer" && !project.archivedAt && (
                   <button
                     type="button"
                     onClick={() => openTaskDialog(project)}
@@ -503,7 +555,15 @@ export default function ProjectsPage() {
                       {formatProjectDate(project.createdAt)}
                     </span>
                     </Link>
-                    {project.myRole !== "viewer" && (
+                    {activeFilter === "trash" ? (
+                      <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 shrink-0 items-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
+                        Restaurar
+                      </button>
+                    ) : activeFilter === "archived" && project.myRole === "owner" ? (
+                      <button type="button" onClick={() => void handleRestoreArchivedProject(project)} className="inline-flex h-9 shrink-0 items-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
+                        Restaurar
+                      </button>
+                    ) : project.myRole !== "viewer" && !project.archivedAt && (
                       <button
                         type="button"
                         onClick={() => openTaskDialog(project)}

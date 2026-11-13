@@ -34,6 +34,7 @@ import {
   getProject,
   getProjectMember,
   listProjectParticipants,
+  moveProjectToTrash,
   updateProject,
 } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
@@ -238,6 +239,17 @@ export default function ProjectDetailPage() {
     }
   }
 
+  async function handleMoveProjectToTrash() {
+    if (!project || !window.confirm(`Mover o projeto "${project.name}" para a lixeira? Ele poderá ser restaurado depois.`)) return;
+
+    try {
+      await moveProjectToTrash(project.id);
+      router.replace("/projects");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Não foi possível mover o projeto para a lixeira.");
+    }
+  }
+
   async function handleCreateProject(data: CreateProjectData) {
     const createdProject = await createProject(data);
     setIsNewProjectDialogOpen(false);
@@ -362,6 +374,13 @@ export default function ProjectDetailPage() {
                       >
                         <Archive className="size-4" aria-hidden="true" />
                         Arquivar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleMoveProjectToTrash()}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3.5 text-sm font-medium text-danger transition-colors hover:bg-danger/15"
+                      >
+                        Excluir
                       </button>
                     </>
                   )}

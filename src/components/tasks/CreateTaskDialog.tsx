@@ -108,9 +108,9 @@ export default function CreateTaskDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="presentation">
+    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-4" role="presentation">
       <button type="button" aria-label="Fechar janela de nova tarefa" className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm" onClick={saving ? undefined : onClose} />
-      <section className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/50" role="dialog" aria-modal="true" aria-labelledby="create-task-title">
+      <section className="relative z-10 my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface shadow-2xl shadow-black/50 sm:max-h-[calc(100dvh-2rem)]" role="dialog" aria-modal="true" aria-labelledby="create-task-title">
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-primary/15 text-primary"><ClipboardPlus className="size-5" aria-hidden="true" /></span>

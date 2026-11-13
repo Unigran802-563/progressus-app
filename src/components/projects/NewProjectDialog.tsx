@@ -77,7 +77,7 @@ export default function NewProjectDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-4"
       role="presentation"
     >
       <button
@@ -88,7 +88,7 @@ export default function NewProjectDialog({
       />
 
       <section
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/50"
+        className="relative z-10 my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface shadow-2xl shadow-black/50 sm:max-h-[calc(100dvh-2rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-project-title"
