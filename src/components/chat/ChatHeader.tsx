@@ -30,7 +30,7 @@ export function ChatHeader({
   const isPrivateChat = selectedChat !== "geral";
 
   return (
-    <header className="relative flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
+    <header className="relative flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-3 sm:px-6">
       <div className="min-w-0">
         <h1 className="truncate text-lg font-semibold text-foreground">
           {isPrivateChat

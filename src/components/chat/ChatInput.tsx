@@ -401,6 +401,14 @@ export function ChatInput({
   const editingFile =
     editingFileIndex !== null ? selectedFiles[editingFileIndex] : null;
 
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [message, editingFile?.content]);
+
   function toggleFileEditing(index: number) {
     setEditingFileIndex((current) => (current === index ? null : index));
   }
@@ -413,7 +421,7 @@ export function ChatInput({
     <>
       <form
         onSubmit={handleSubmit}
-        className="relative border-t border-border bg-surface p-4"
+        className="relative shrink-0 border-t border-border bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
       >
         <div className="mx-auto max-w-4xl">
           {selectedFiles.length > 0 && (

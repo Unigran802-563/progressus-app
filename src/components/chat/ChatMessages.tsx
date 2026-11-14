@@ -389,11 +389,11 @@ export function ChatMessages({
           onWheel={handleUserInteraction}
           onTouchStart={handleUserInteraction}
           onPointerDown={handleUserInteraction}
-          className="h-full min-h-0 overflow-y-auto p-4"
+          className="h-full min-h-0 overflow-x-hidden overflow-y-auto p-3 sm:p-4"
         >
           <div
             ref={contentRef}
-            className="mx-auto flex max-w-4xl flex-col gap-3"
+            className="mx-auto flex max-w-4xl min-w-0 flex-col gap-3"
           >
             {messages.map((message) => (
               <div key={message.id_mensagem} className="scroll-mt-4">
