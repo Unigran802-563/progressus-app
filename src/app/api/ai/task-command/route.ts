@@ -29,7 +29,7 @@ function parseDraft(text: string): Draft {
   const prioridade = value.prioridade === 'Baixa' || value.prioridade === 'Alta' ? value.prioridade : 'Media';
   const nome = String(value.nome ?? '').trim();
   const projetoNome = String(value.projetoNome ?? '').trim();
-  if (!nome || !projetoNome) throw new Error('A IA não conseguiu identificar o nome da tarefa e do projeto.');
+  if (!nome) throw new Error('A IA não conseguiu identificar o nome da tarefa.');
   return {
     nome,
     projetoNome,
@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
     if (availableProjects.length === 0) return fail(400, 'Você ainda não possui projetos ativos para receber uma tarefa.');
 
     const prompt = `Você interpreta comandos de criação de tarefas do Progressus. Responda somente JSON válido.
-Campos obrigatórios: nome, descricao, prioridade, prazo, projetoNome.
+Campos: nome, descricao, prioridade, prazo e projetoNome.
 prioridade deve ser Baixa, Media ou Alta. prazo deve ser YYYY-MM-DD ou null. Se o usuário disser hoje, amanhã ou esta semana, calcule usando a data atual ${new Date().toISOString().slice(0, 10)}.
-Escolha projetoNome exatamente de uma opção disponível. Não invente projeto. Se faltar informação, use null apenas para descricao e prazo; nome e projetoNome são obrigatórios.
+Escolha projetoNome exatamente de uma opção disponível. Não invente projeto. Se o usuário não informar o projeto e houver apenas uma opção disponível, use essa opção. Se houver mais de uma opção e o projeto não puder ser identificado, use projetoNome como string vazia para que o sistema peça esclarecimento. descricao e prazo podem ser null. O status informado pelo usuário é opcional; a tarefa usará o primeiro status do projeto.
 Projetos disponíveis: ${JSON.stringify(availableProjects.map((project) => project.nome))}
 Comando do usuário: ${message}`;
 
@@ -83,8 +83,20 @@ Comando do usuário: ${message}`;
 
     const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
     const draft = parseDraft(text);
-    const project = availableProjects.find((item) => item.nome.toLocaleLowerCase('pt-BR') === draft.projetoNome.toLocaleLowerCase('pt-BR'));
-    if (!project) return fail(400, 'Não consegui associar o comando a um projeto ativo permitido. Informe o nome exato do projeto.');
+    const normalizedProjectName = draft.projetoNome.toLocaleLowerCase('pt-BR');
+    const project = normalizedProjectName
+      ? availableProjects.find((item) => item.nome.toLocaleLowerCase('pt-BR') === normalizedProjectName)
+      : availableProjects.length === 1
+        ? availableProjects[0]
+        : undefined;
+    if (!project) {
+      return fail(
+        400,
+        availableProjects.length > 1
+          ? `Informe em qual projeto deseja criar a tarefa. Projetos disponíveis: ${availableProjects.map((item) => item.nome).join(', ')}.`
+          : 'Não consegui associar o comando a um projeto ativo permitido.',
+      );
+    }
 
     const { data: statuses, error: statusError } = await supabase.from('status').select('id_status, nome, ordem').eq('id_projeto', project.id_projeto).order('ordem', { ascending: true }).limit(20);
     if (statusError) throw new Error(statusError.message);

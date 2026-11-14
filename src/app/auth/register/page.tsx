@@ -67,7 +67,7 @@ export default function RegisterPage() {
     if (response.success) {
       window.setTimeout(() => {
         router.push('/auth/login');
-      }, 1500);
+      }, 8000);
     }
   }
 
