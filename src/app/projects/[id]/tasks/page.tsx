@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTasksPanel from '@/components/projects/ProjectTasksPanel';
+import AppShell from '@/components/layout/AppShell';
 import { useProjectAccessSync } from '@/hooks/useProjectAccessSync';
 import { getProject, getProjectMember } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +19,7 @@ export default function TasksPage({ params }: TasksPageProps) {
   const [projectId, setProjectId] = useState('');
   const [project, setProject] = useState<Project | null>(null);
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
+  const [userName, setUserName] = useState('Usuário');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -68,6 +70,8 @@ export default function TasksPage({ params }: TasksPageProps) {
         }
         id = resolvedParams.id;
         userId = data.user.id;
+        const metadata = data.user.user_metadata as { nome?: string; name?: string } | undefined;
+        setUserName(metadata?.nome || metadata?.name || data.user.email?.split('@')[0] || 'Usuário');
         setProjectId(id);
         await loadProject();
       } catch (err) {
@@ -98,14 +102,35 @@ export default function TasksPage({ params }: TasksPageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#0b0d12] px-6 py-10 text-white">
-        <p className="text-zinc-400">Carregando tarefas...</p>
-      </main>
+      <AppShell
+        userName={userName}
+        userInitial={userName.charAt(0).toUpperCase() || 'U'}
+        onLogout={async () => {
+          await supabase.auth.signOut();
+          router.replace('/auth/login');
+        }}
+        createLabel="Nova tarefa"
+      >
+        <div className="min-h-screen bg-[#0b0d12] px-6 py-10 text-white">
+          <p className="text-zinc-400">Carregando tarefas...</p>
+        </div>
+      </AppShell>
     );
   }
 
+  async function logout() {
+    await supabase.auth.signOut();
+    router.replace('/auth/login');
+  }
+
   return (
-    <main className="min-h-screen bg-[#0b0d12] px-4 py-8 text-white sm:px-6">
+    <AppShell
+      userName={userName}
+      userInitial={userName.charAt(0).toUpperCase() || 'U'}
+      onLogout={logout}
+      createLabel="Nova tarefa"
+    >
+      <div className="min-h-screen bg-[#0b0d12] px-4 py-8 text-white sm:px-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -130,6 +155,7 @@ export default function TasksPage({ params }: TasksPageProps) {
           </>
         )}
       </div>
-    </main>
+      </div>
+    </AppShell>
   );
 }
