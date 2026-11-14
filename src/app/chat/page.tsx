@@ -681,7 +681,7 @@ function ChatContent() {
           </aside>
 
           {/* Área da conversa */}
-          <section className={`${hasSelection ? "flex" : "hidden lg:flex"} min-h-0 min-w-0 flex-1 flex-col`}>
+          <section className={`${hasSelection ? "flex" : "hidden lg:flex"} min-h-0 min-w-0 flex-1 flex-col overflow-hidden`}>
             {!hasSelection ? (
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -739,7 +739,7 @@ function ChatContent() {
                 />
 
                 {messageError && (
-                  <div className="border-t bg-red-50 px-4 py-2 text-center text-sm text-red-600">
+                  <div className="shrink-0 border-t bg-red-50 px-4 py-2 text-center text-sm text-red-600">
                     {messageError}
                   </div>
                 )}

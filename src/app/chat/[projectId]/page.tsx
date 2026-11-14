@@ -243,7 +243,7 @@ export default function ChatPage({ params }: ChatPageProps) {
             onSelectPrivate={handleSelectPrivate}
           />
 
-          <section className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col">
+          <section className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
             <ChatHeader
               projectName={projectName ?? "Projeto"}
               participants={participants}
@@ -260,7 +260,7 @@ export default function ChatPage({ params }: ChatPageProps) {
             />
 
             {messageError && (
-              <div className="border-t bg-red-50 px-4 py-2 text-center text-sm text-red-600">
+              <div className="shrink-0 border-t bg-red-50 px-4 py-2 text-center text-sm text-red-600">
                 {messageError}
               </div>
             )}

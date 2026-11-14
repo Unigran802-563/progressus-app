@@ -421,7 +421,7 @@ export function ChatInput({
     <>
       <form
         onSubmit={handleSubmit}
-        className="sticky bottom-0 z-20 relative shrink-0 border-t border-border bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
+        className="relative z-20 flex-none border-t border-border bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4"
       >
         <div className="mx-auto max-w-4xl">
           {selectedFiles.length > 0 && (
