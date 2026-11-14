@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
   MessageSquare,
   Search,
   Users,
@@ -335,6 +336,8 @@ function ChatContent() {
     isSending,
     error: messageError,
     sendMessage,
+    editMessage,
+    removeMessage,
   } = useChatMessages(
     chatId,
     user?.id ?? null,
@@ -432,9 +435,9 @@ function ChatContent() {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:flex-row">
           {/* Painel de conversas */}
           <aside
-            className={`flex min-h-0 shrink-0 flex-col border-b border-border transition-all duration-300 lg:border-b-0 lg:border-r ${
+            className={`${hasSelection ? "hidden lg:flex" : "flex flex-1 lg:flex-none"} min-h-0 shrink-0 flex-col border-b border-border transition-all duration-300 lg:border-b-0 lg:border-r ${
               isSidebarCollapsed ? "w-full lg:w-16" : "w-full lg:w-[280px]"
-            } max-h-[46%] lg:max-h-none`}
+            } max-h-none lg:max-h-none`}
           >
             {/* Cabeçalho */}
             <div
@@ -678,7 +681,7 @@ function ChatContent() {
           </aside>
 
           {/* Área da conversa */}
-          <section className="flex min-w-0 flex-1 flex-col">
+          <section className={`${hasSelection ? "flex" : "hidden lg:flex"} min-w-0 flex-1 flex-col`}>
             {!hasSelection ? (
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -714,6 +717,7 @@ function ChatContent() {
               </div>
             ) : chatId && user ? (
               <>
+                <button type="button" onClick={handleClearSelection} className="inline-flex h-11 shrink-0 items-center gap-2 border-b border-border px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"><ArrowLeft className="size-4" />Voltar para conversas</button>
                 <ChatHeader
                   projectName={projectName ?? ""}
                   participants={participants}
@@ -730,6 +734,8 @@ function ChatContent() {
                   participants={participants}
                   isLoading={isMessagesLoading}
                   firstUnreadMessageId={firstUnreadMessageId}
+                  onEditMessage={editMessage}
+                  onDeleteMessage={removeMessage}
                 />
 
                 {messageError && (

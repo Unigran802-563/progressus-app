@@ -131,6 +131,8 @@ export default function ChatPage({ params }: ChatPageProps) {
     isSending,
     error: messageError,
     sendMessage,
+    editMessage,
+    removeMessage,
   } = useChatMessages(chatId, user?.id ?? null, projectId);
 
   async function handleSelectGeneral() {
@@ -253,6 +255,8 @@ export default function ChatPage({ params }: ChatPageProps) {
               currentUserId={user.id}
               participants={participants}
               isLoading={isMessagesLoading}
+              onEditMessage={editMessage}
+              onDeleteMessage={removeMessage}
             />
 
             {messageError && (

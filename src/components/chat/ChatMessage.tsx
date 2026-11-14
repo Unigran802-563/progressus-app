@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check, Ellipsis, Pencil, Trash2, X } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage as ChatMessageType, ChatFile } from "@/types/chat";
@@ -10,6 +11,8 @@ type ChatMessageProps = {
   isOwn: boolean;
   senderName: string;
   onOpenFile: (file: ChatFile) => void;
+  onEdit?: (messageId: string, content: string) => Promise<void>;
+  onDelete?: (messageId: string) => Promise<void>;
 };
 
 function renderMessageContent(
@@ -71,8 +74,14 @@ export function ChatMessage({
   isOwn,
   senderName,
   onOpenFile,
+  onEdit,
+  onDelete,
 }: ChatMessageProps) {
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.conteudo ?? "");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function loadFileUrls() {
@@ -103,6 +112,28 @@ export function ChatMessage({
     loadFileUrls();
   }, [message.arquivos]);
 
+  async function saveEdit() {
+    if (!onEdit || !draft.trim()) return;
+    try {
+      setSaving(true);
+      await onEdit(message.id_mensagem, draft);
+      setEditing(false);
+      setMenuOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!onDelete || !window.confirm("Deseja apagar esta mensagem?")) return;
+    setSaving(true);
+    try {
+      await onDelete(message.id_mensagem);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
       <div
@@ -120,7 +151,15 @@ export function ChatMessage({
           {isOwn ? "Você" : senderName}
         </span>
 
-        {message.conteudo && (
+        {editing ? (
+          <div className="space-y-2">
+            <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} autoFocus className="w-full min-w-48 rounded-lg border border-primary/40 bg-background/30 px-2 py-1.5 text-sm text-foreground outline-none" />
+            <div className="flex justify-end gap-1.5">
+              <button type="button" onClick={() => { setEditing(false); setDraft(message.conteudo ?? ""); }} className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs"><X className="size-3.5" />Cancelar</button>
+              <button type="button" onClick={() => void saveEdit()} disabled={saving || !draft.trim()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-xs text-primary-foreground disabled:opacity-50"><Check className="size-3.5" />Salvar</button>
+            </div>
+          </div>
+        ) : message.conteudo && (
           <p className="whitespace-pre-wrap break-words text-sm">
             {renderMessageContent(message.conteudo, message.menções, isOwn)}
           </p>
@@ -192,6 +231,16 @@ export function ChatMessage({
             minute: "2-digit",
           })}
         </span>
+
+        {isOwn && (onEdit || onDelete) && !editing && (
+          <div className="relative mt-1 flex justify-end">
+            <button type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Ações da mensagem" className="grid size-8 place-items-center rounded-lg text-current/60 transition hover:bg-black/10 hover:text-current"><Ellipsis className="size-4" /></button>
+            {menuOpen && <div className="absolute bottom-9 right-0 z-20 min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl">
+              {onEdit && <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Pencil className="size-3.5" />Editar</button>}
+              {onDelete && <button type="button" onClick={() => void remove()} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar</button>}
+            </div>}
+          </div>
+        )}
       </div>
     </div>
   );

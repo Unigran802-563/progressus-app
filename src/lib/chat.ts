@@ -231,6 +231,33 @@ export async function sendChatMessage(
   return data as ChatMessage;
 }
 
+export async function updateChatMessage(
+  messageId: string,
+  content: string,
+): Promise<ChatMessage> {
+  const message = content.trim();
+  if (!message) throw new Error("A mensagem não pode ficar vazia.");
+
+  const { data, error } = await supabase
+    .from("mensagem")
+    .update({ conteudo: message })
+    .eq("id_mensagem", messageId)
+    .select("id_mensagem, id_chat, id_usuario, conteudo, data_hora")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as ChatMessage;
+}
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from("mensagem")
+    .delete()
+    .eq("id_mensagem", messageId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function listChatParticipants(
   projectId: string,
 ): Promise<ChatParticipant[]> {

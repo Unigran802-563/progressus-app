@@ -18,6 +18,8 @@ type ChatMessagesProps = {
   participants: ChatParticipant[];
   isLoading: boolean;
   firstUnreadMessageId?: string | null;
+  onEditMessage?: (messageId: string, content: string) => Promise<void>;
+  onDeleteMessage?: (messageId: string) => Promise<void>;
 };
 
 export function ChatMessages({
@@ -26,6 +28,8 @@ export function ChatMessages({
   participants,
   isLoading,
   firstUnreadMessageId = null,
+  onEditMessage,
+  onDeleteMessage,
 }: ChatMessagesProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -409,6 +413,8 @@ export function ChatMessages({
                     isOwn={message.id_usuario === currentUserId}
                     senderName={getSenderName(message)}
                     onOpenFile={openFile}
+                    onEdit={onEditMessage}
+                    onDelete={onDeleteMessage}
                   />
                 </div>
               </div>

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listChatMessages,
   sendChatMessage,
+  updateChatMessage,
+  deleteChatMessage,
   uploadChatFile,
   markChatMessagesAsRead,
 } from "@/lib/chat";
@@ -29,6 +31,8 @@ type UseChatMessagesReturn = {
     files: ChatFileDraft[],
     mentions: ChatMentionDraft[],
   ) => Promise<void>;
+  editMessage: (messageId: string, content: string) => Promise<void>;
+  removeMessage: (messageId: string) => Promise<void>;
 };
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -444,6 +448,18 @@ export function useChatMessages(
     }
   }
 
+  async function editMessage(messageId: string, content: string) {
+    const updated = await updateChatMessage(messageId, content);
+    setMessages((current) => current.map((message) => message.id_mensagem === messageId ? { ...message, ...updated } : message));
+    messagesRef.current = messagesRef.current.map((message) => message.id_mensagem === messageId ? { ...message, ...updated } : message);
+  }
+
+  async function removeMessage(messageId: string) {
+    await deleteChatMessage(messageId);
+    setMessages((current) => current.filter((message) => message.id_mensagem !== messageId));
+    messagesRef.current = messagesRef.current.filter((message) => message.id_mensagem !== messageId);
+  }
+
   return {
     messages,
     firstUnreadMessageId,
@@ -451,5 +467,7 @@ export function useChatMessages(
     isSending,
     error,
     sendMessage,
+    editMessage,
+    removeMessage,
   };
 }

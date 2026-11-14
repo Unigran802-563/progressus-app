@@ -166,9 +166,6 @@ export default function RegisterPage() {
               )}
             </button>
           </div>
-          <p className="text-[11px] leading-4 text-muted-foreground">
-            Mínimo de 8 caracteres, uma maiúscula, um número e um caractere especial.
-          </p>
           <ul aria-live="polite" aria-label="Requisitos da senha" className="grid gap-1 pt-1 text-[11px] leading-4">
             {passwordChecks.map((rule) => (
               <li key={rule.label} className={`flex items-center gap-2 ${rule.valid ? 'text-success' : 'text-muted-foreground'}`}>
