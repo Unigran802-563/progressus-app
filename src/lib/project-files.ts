@@ -100,3 +100,11 @@ export async function createProjectFileUrl(path: string): Promise<string> {
   if (error || !data?.signedUrl) throw new Error(error?.message ?? 'Não foi possível abrir o arquivo.');
   return data.signedUrl;
 }
+
+export async function deleteProjectFile(file: ProjectFile): Promise<void> {
+  const { error: storageError } = await supabase.storage.from('arquivos').remove([file.path]);
+  if (storageError) throw new Error(storageError.message);
+
+  const { error: rowError } = await supabase.from('arquivo').delete().eq('id_arquivo', file.id);
+  if (rowError) throw new Error(rowError.message);
+}

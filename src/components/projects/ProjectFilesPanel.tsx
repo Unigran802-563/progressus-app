@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Download, FileText, Loader2, Paperclip, Plus, X } from 'lucide-react';
+import { Download, FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-react';
 
-import { createProjectFileUrl, listProjectFiles, uploadProjectFile, type ProjectFile } from '@/lib/project-files';
+import { createProjectFileUrl, deleteProjectFile, listProjectFiles, uploadProjectFile, type ProjectFile } from '@/lib/project-files';
 import { EmptyState } from '@/components/ui/progressus-ui';
+import ProjectConfirmationDialog from '@/components/projects/ProjectConfirmationDialog';
 
 type Props = { projectId: string; disabled?: boolean };
 
@@ -28,6 +29,8 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
   const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<ProjectFile | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadFiles() {
     try {
@@ -111,6 +114,22 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
     }
   }
 
+  async function handleDeleteFile() {
+    if (!deletingFile) return;
+    try {
+      setDeleting(true);
+      setError('');
+      await deleteProjectFile(deletingFile);
+      setFiles((current) => current.filter((file) => file.id !== deletingFile.id));
+      if (selectedFile?.id === deletingFile.id) setSelectedFile(null);
+      setDeletingFile(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível excluir o arquivo.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="p-5">
       <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -142,7 +161,10 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
                 <p className="mt-1 text-xs text-muted-foreground">{file.source === 'chat' ? 'Anexo do Chat' : 'Arquivo do projeto'} · {formatSize(file.size)}</p>
                 {canPreview(file) && <p className="mt-1 text-[11px] text-primary">Clique para visualizar</p>}
               </div>
-              <button type="button" onClick={(event) => { event.stopPropagation(); void handleDownload(file); }} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-primary" title="Baixar arquivo"><Download className="size-4" /></button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button type="button" onClick={(event) => { event.stopPropagation(); void handleDownload(file); }} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-primary" title="Baixar arquivo"><Download className="size-4" /></button>
+                <button type="button" onClick={(event) => { event.stopPropagation(); setDeletingFile(file); }} disabled={disabled} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-50" title="Excluir arquivo"><Trash2 className="size-4" /></button>
+              </div>
             </article>
           ))}
         </div>
@@ -164,6 +186,20 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
           </div>
         </div>
       )}
+
+      <ProjectConfirmationDialog
+        open={Boolean(deletingFile)}
+        title="Excluir arquivo?"
+        description={<>O arquivo <strong className="text-foreground">{deletingFile?.name}</strong> será removido do projeto e não poderá ser recuperado.</>}
+        icon={<Trash2 className="size-5" />}
+        variant="danger"
+        confirmLabel="Excluir arquivo"
+        pendingLabel="Excluindo..."
+        pending={deleting}
+        error={error}
+        onClose={() => { if (!deleting) setDeletingFile(null); }}
+        onConfirm={() => void handleDeleteFile()}
+      />
     </div>
   );
 }
