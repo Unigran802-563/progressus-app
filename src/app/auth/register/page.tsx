@@ -35,6 +35,12 @@ export default function RegisterPage() {
       valid: confirmPassword.length > 0 && formData.password === confirmPassword,
     },
   ];
+  const canSubmit = Boolean(
+    formData.name.trim()
+      && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())
+      && passwordChecks.every((rule) => rule.valid)
+      && !isSubmitting,
+  );
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
@@ -48,15 +54,36 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    setIsSubmitting(true);
     setFeedbackMessage('');
     setIsSuccess(false);
 
-    if (formData.password !== confirmPassword) {
-      setFeedbackMessage('As senhas não coincidem. Verifique os campos e tente novamente.');
-      setIsSubmitting(false);
+    if (!formData.name.trim()) {
+      setFeedbackMessage('Informe seu nome completo.');
       return;
     }
+    if (!formData.email.trim()) {
+      setFeedbackMessage('Informe seu e-mail.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setFeedbackMessage('Informe um e-mail válido.');
+      return;
+    }
+    if (!formData.password) {
+      setFeedbackMessage('Informe uma senha.');
+      return;
+    }
+
+    if (formData.password !== confirmPassword) {
+      setFeedbackMessage('As senhas não coincidem. Verifique os campos e tente novamente.');
+      return;
+    }
+    if (!passwordChecks.every((rule) => rule.valid)) {
+      setFeedbackMessage('A senha ainda não atende a todos os requisitos.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     const response = await register(formData);
 
@@ -84,7 +111,7 @@ export default function RegisterPage() {
         </p>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-3.5">
+      <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
         <div className="grid gap-3.5 sm:grid-cols-2">
           <div className="space-y-1">
             <label htmlFor="name" className="block text-xs font-semibold text-foreground">
@@ -103,7 +130,6 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 placeholder="Digite seu nome"
                 autoComplete="name"
-                required
                 className="h-10 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
               />
             </div>
@@ -126,7 +152,6 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 placeholder="seuemail@exemplo.com"
                 autoComplete="email"
-                required
                 className="h-10 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
               />
             </div>
@@ -150,7 +175,6 @@ export default function RegisterPage() {
               onChange={handleChange}
               placeholder="Crie uma senha segura"
               autoComplete="new-password"
-              required
               className="h-10 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-11 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
             <button
@@ -200,7 +224,6 @@ export default function RegisterPage() {
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Repita sua senha"
               autoComplete="new-password"
-              required
               className="h-10 w-full rounded-xl border border-border bg-surface-2 pl-10 pr-11 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40"
             />
             <button
@@ -233,7 +256,7 @@ export default function RegisterPage() {
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={!canSubmit}
           className="glow-accent flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSubmitting ? 'Criando conta...' : 'Criar conta'}

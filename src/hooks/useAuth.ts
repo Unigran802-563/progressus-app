@@ -27,6 +27,19 @@ function isValidPassword(password: string): boolean {
   return passwordRegex.test(password);
 }
 
+async function withAuthTimeout<T>(request: Promise<T>, timeoutMs = 15000): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('auth-timeout')), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -85,7 +98,9 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function register(data: RegisterFormData): Promise<AuthResponse> {
-    const { name, email, password } = data;
+    const name = data.name.trim();
+    const email = data.email.trim();
+    const { password } = data;
 
     if (!name || !email || !password) {
       return {
@@ -102,30 +117,39 @@ export function useAuth(): UseAuthReturn {
       };
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          role: 'student',
+    try {
+      const { error } = await withAuthTimeout(supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role: 'student',
+          },
         },
-      },
-    });
+      }));
 
-    if (error) {
-  console.error('Erro ao cadastrar usuário no Supabase:', error);
+      if (error) {
+        console.error('Erro ao cadastrar usuário no Supabase:', error);
 
-  return {
-    success: false,
-    message: error.message,
-  };
-}
+        return {
+          success: false,
+          message: error.message,
+        };
+      }
 
-    return {
-      success: true,
-      message: 'Cadastro realizado com sucesso. Verifique seu e-mail, se a confirmação estiver ativada.',
-    };
+      return {
+        success: true,
+        message: 'Cadastro realizado com sucesso. Verifique seu e-mail, se a confirmação estiver ativada.',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error && error.message === 'auth-timeout'
+          ? 'A verificação demorou mais que o esperado. Confira sua conexão e tente novamente.'
+          : 'Não foi possível criar a conta agora. Tente novamente.',
+      };
+    }
   }
 
   async function forgotPassword(data: ForgotPasswordFormData): Promise<AuthResponse> {
