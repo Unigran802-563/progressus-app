@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
   Bell,
   CalendarDays,
+  CheckCircle2,
   ClipboardPlus,
   ChevronDown,
   FolderKanban,
@@ -108,6 +109,7 @@ export default function AppShell({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [isGlobalProjectOpen, setIsGlobalProjectOpen] = useState(false);
@@ -125,6 +127,17 @@ export default function AppShell({
     readCount();
     window.addEventListener("progressus:notifications-changed", readCount);
     return () => window.removeEventListener("progressus:notifications-changed", readCount);
+  }, []);
+
+  useEffect(() => {
+    const showSuccess = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message;
+      if (!message) return;
+      setSuccessNotice(message);
+      window.setTimeout(() => setSuccessNotice(""), 3500);
+    };
+    window.addEventListener("progressus:success", showSuccess);
+    return () => window.removeEventListener("progressus:success", showSuccess);
   }, []);
 
   useEffect(() => {
@@ -413,7 +426,7 @@ export default function AppShell({
               <Menu className="size-[18px]" aria-hidden="true" />
             </button>
 
-            <div className="relative min-w-0 flex-1">
+            <div className="relative min-w-0 w-[min(45vw,220px)] shrink lg:flex-1 lg:w-auto">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                 aria-hidden="true"
@@ -426,7 +439,7 @@ export default function AppShell({
                 onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); }}
                 placeholder="Buscar projetos, tarefas e mensagens…"
                 aria-label="Busca global"
-                className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-4 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/80 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40 lg:max-w-md"
+                className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/80 focus:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring/40 sm:pr-4 lg:max-w-md"
               />
               {searchOpen && searchTerm.trim().length >= 2 && (
                 <div className="absolute left-0 right-0 top-12 z-50 overflow-hidden rounded-xl border border-border bg-surface shadow-2xl shadow-black/30 lg:max-w-md">
@@ -453,14 +466,15 @@ export default function AppShell({
               <button
                 type="button"
                 onClick={handleOpenCreateMenu}
-                className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-foreground transition hover:bg-accent sm:flex"
+                aria-label="Criar tarefa ou projeto"
+                className="flex size-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-medium text-foreground transition hover:bg-accent sm:h-10 sm:w-auto sm:px-3"
               >
                 <Plus className="size-4 text-primary" aria-hidden="true" />
-                Criar
+                <span className="hidden sm:inline">Criar</span>
               </button>
 
               {isCreateMenuOpen && (
-                <div className="absolute right-[118px] top-14 z-40 w-52 rounded-xl border border-border bg-surface p-1.5 shadow-2xl shadow-black/30">
+                <div className="absolute right-4 top-14 z-40 w-52 rounded-xl border border-border bg-surface p-1.5 shadow-2xl shadow-black/30 sm:right-[118px]">
                   <button type="button" onClick={handleOpenNewTask} disabled={globalProjectsLoading} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground transition hover:bg-accent disabled:opacity-50">
                     <ClipboardPlus className="size-4 text-primary" />
                     Nova tarefa
@@ -541,8 +555,14 @@ export default function AppShell({
             {notice}
           </div>
         )}
+        {successNotice && (
+          <div className="fixed bottom-5 right-5 z-50 flex max-w-sm items-center gap-2 rounded-xl border border-success/30 bg-surface px-4 py-3 text-sm text-success shadow-2xl shadow-black/30" role="status">
+            <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+            {successNotice}
+          </div>
+        )}
 
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="min-h-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
 
       <NewProjectDialog

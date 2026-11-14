@@ -7,6 +7,7 @@ import { getProject, getProjectMember, listAccessibleProjects, listProjectPartic
 import { supabase } from '@/lib/supabase';
 import { canEditTask } from '@/lib/task-permissions';
 import { atualizarTarefa, buscarTarefa, excluirTarefa, listarStatus } from '@/lib/tasks';
+import { emitSuccess } from '@/lib/feedback';
 import type { AtualizarTarefaData, Project, ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from '@/types';
 
 type EditTaskDialogProps = {
@@ -357,6 +358,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       }
       const updated = await atualizarTarefa(original.id_tarefa, payload);
       if (!isCurrent()) return;
+      emitSuccess('Tarefa atualizada com sucesso.');
       callbacksRef.current.onSaved?.(updated);
       callbacksRef.current.onClose();
     } catch (reason) {
@@ -391,6 +393,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       }
       await excluirTarefa(original.id_tarefa);
       if (!isCurrent()) return;
+      emitSuccess('Tarefa excluída com sucesso.');
       callbacksRef.current.onDeleted?.(original.id_tarefa);
       callbacksRef.current.onClose();
     } catch (reason) {

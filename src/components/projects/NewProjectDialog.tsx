@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { FolderPlus, Loader2, X } from 'lucide-react';
 
 import type { CreateProjectData } from '@/types';
+import { emitSuccess } from '@/lib/feedback';
 
 type NewProjectDialogProps = {
   open: boolean;
@@ -62,6 +63,7 @@ export default function NewProjectDialog({
         name,
         description,
       });
+      emitSuccess('Projeto criado com sucesso.');
     } catch (error) {
       setErrorMessage(
         error instanceof Error

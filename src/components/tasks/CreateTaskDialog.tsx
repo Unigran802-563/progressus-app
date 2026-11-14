@@ -7,6 +7,7 @@ import ProjectConfirmationDialog from '@/components/projects/ProjectConfirmation
 
 import { criarTarefa, listarOuCriarStatus } from '@/lib/tasks';
 import { listProjectParticipants } from '@/lib/projects';
+import { emitSuccess } from '@/lib/feedback';
 import type { AccessibleProject, ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from '@/types';
 
 function toLocalDateTimeInput(value: string) {
@@ -23,8 +24,17 @@ function localDateTimeToIso(value: string) {
 }
 
 function isPastDueDate(value: string) {
-  const timestamp = new Date(value).getTime();
-  return Boolean(value && !Number.isNaN(timestamp) && timestamp < Date.now());
+  if (!value) return false;
+
+  const selected = new Date(value);
+  if (Number.isNaN(selected.getTime())) return false;
+
+  // datetime-local não possui segundos; compare no mesmo nível de precisão
+  // para não rejeitar o minuto atual enquanto o relógio ainda está avançando.
+  selected.setSeconds(0, 0);
+  const now = new Date();
+  now.setSeconds(0, 0);
+  return selected.getTime() < now.getTime();
 }
 
 function formatLocalDateTime(date: Date) {
@@ -229,6 +239,7 @@ export default function CreateTaskDialog({
         prioridade: priority,
         prazo: dueDate || null,
       });
+      emitSuccess('Tarefa criada com sucesso.');
       onCreated?.(createdTask);
       onClose();
     } catch (reason) {

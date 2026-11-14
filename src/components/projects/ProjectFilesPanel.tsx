@@ -6,6 +6,7 @@ import { Download, FileText, Loader2, Paperclip, Plus, Trash2, X } from 'lucide-
 import { createProjectFileUrl, deleteProjectFile, listProjectFiles, uploadProjectFile, type ProjectFile } from '@/lib/project-files';
 import { EmptyState } from '@/components/ui/progressus-ui';
 import ProjectConfirmationDialog from '@/components/projects/ProjectConfirmationDialog';
+import { emitSuccess } from '@/lib/feedback';
 
 type Props = { projectId: string; disabled?: boolean };
 
@@ -98,6 +99,7 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
       setError('');
       const created = await uploadProjectFile(projectId, file);
       setFiles((current) => [created, ...current]);
+      emitSuccess('Arquivo enviado com sucesso.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Não foi possível enviar o arquivo.');
     } finally {
@@ -123,6 +125,7 @@ export default function ProjectFilesPanel({ projectId, disabled = false }: Props
       setFiles((current) => current.filter((file) => file.id !== deletingFile.id));
       if (selectedFile?.id === deletingFile.id) setSelectedFile(null);
       setDeletingFile(null);
+      emitSuccess('Arquivo excluído com sucesso.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Não foi possível excluir o arquivo.');
     } finally {

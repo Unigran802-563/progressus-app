@@ -5,6 +5,8 @@ import { Check, Ellipsis, Pencil, Trash2, X } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import type { ChatMessage as ChatMessageType, ChatFile } from "@/types/chat";
+import ProjectConfirmationDialog from "@/components/projects/ProjectConfirmationDialog";
+import { emitSuccess } from "@/lib/feedback";
 
 type ChatMessageProps = {
   message: ChatMessageType;
@@ -82,6 +84,7 @@ export function ChatMessage({
   const [draft, setDraft] = useState(message.conteudo ?? "");
   const [menuOpen, setMenuOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     async function loadFileUrls() {
@@ -117,6 +120,7 @@ export function ChatMessage({
     try {
       setSaving(true);
       await onEdit(message.id_mensagem, draft);
+      emitSuccess("Mensagem editada com sucesso.");
       setEditing(false);
       setMenuOpen(false);
     } finally {
@@ -125,10 +129,13 @@ export function ChatMessage({
   }
 
   async function remove() {
-    if (!onDelete || !window.confirm("Deseja apagar esta mensagem?")) return;
+    if (!onDelete) return;
     setSaving(true);
     try {
       await onDelete(message.id_mensagem);
+      emitSuccess("Mensagem excluída com sucesso.");
+      setDeleteDialogOpen(false);
+      setMenuOpen(false);
     } finally {
       setSaving(false);
     }
@@ -137,7 +144,7 @@ export function ChatMessage({
   return (
     <div className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
+        className={`relative max-w-[75%] rounded-2xl px-4 py-2 pr-10 shadow-sm ${
           isOwn
             ? "bg-primary text-primary-foreground"
             : "border border-border bg-surface text-foreground"
@@ -233,15 +240,27 @@ export function ChatMessage({
         </span>
 
         {isOwn && (onEdit || onDelete) && !editing && (
-          <div className="relative mt-1 flex justify-end">
+          <div className="absolute right-2 top-2 z-10">
             <button type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Ações da mensagem" className="grid size-8 place-items-center rounded-lg text-current/60 transition hover:bg-black/10 hover:text-current"><Ellipsis className="size-4" /></button>
-            {menuOpen && <div className="absolute bottom-9 right-0 z-20 min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl">
+            {menuOpen && <div className="absolute right-0 top-9 z-20 min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl">
               {onEdit && <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Pencil className="size-3.5" />Editar</button>}
-              {onDelete && <button type="button" onClick={() => void remove()} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar</button>}
+              {onDelete && <button type="button" onClick={() => { setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar</button>}
             </div>}
           </div>
         )}
       </div>
+      <ProjectConfirmationDialog
+        open={deleteDialogOpen}
+        title="Apagar mensagem?"
+        description="Esta mensagem será removida da conversa e não poderá ser recuperada."
+        icon={<Trash2 className="size-5" aria-hidden="true" />}
+        variant="danger"
+        confirmLabel="Apagar mensagem"
+        pendingLabel="Apagando..."
+        pending={saving}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={() => void remove()}
+      />
     </div>
   );
 }

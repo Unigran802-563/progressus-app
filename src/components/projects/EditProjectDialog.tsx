@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Loader2, PencilLine, X } from 'lucide-react';
 
 import type { Project, UpdateProjectData } from '@/types';
+import { emitSuccess } from '@/lib/feedback';
 
 type EditProjectDialogProps = {
   open: boolean;
@@ -62,6 +63,7 @@ export default function EditProjectDialog({
         name,
         description,
       });
+      emitSuccess('Projeto atualizado com sucesso.');
     } catch (error) {
       setErrorMessage(
         error instanceof Error
