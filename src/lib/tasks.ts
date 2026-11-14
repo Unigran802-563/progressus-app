@@ -79,7 +79,7 @@ export async function obterMetricasTarefas(): Promise<TaskMetrics> {
     } else {
       metrics.abertas += 1;
       if (emProgresso) metrics.emProgresso += 1;
-      if (row.prazo && new Date(`${row.prazo}T00:00:00`) < hoje) metrics.atrasadas += 1;
+      if (row.prazo && new Date(row.prazo) < new Date()) metrics.atrasadas += 1;
     }
   }
   return metrics;

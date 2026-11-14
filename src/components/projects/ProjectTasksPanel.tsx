@@ -28,6 +28,10 @@ import { canEditTask } from "@/lib/task-permissions";
 import { getTaskResponsibleName } from "@/lib/task-responsibles";
 import type { ProjectParticipant, ProjectRole, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
+function localDateTimeToIso(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
+
 type ProjectTasksPanelProps = {
   projectId: string;
   disabled?: boolean;
@@ -277,7 +281,7 @@ export default function ProjectTasksPanel({
         nome,
         descricao,
         prioridade,
-        prazo: prazo || null,
+        prazo: localDateTimeToIso(prazo),
       });
 
       setTarefas((currentTasks) => [
@@ -946,12 +950,12 @@ export default function ProjectTasksPanel({
                   htmlFor="project-task-due-date"
                   className="mb-2 block text-sm font-medium text-foreground"
                 >
-                  Prazo
+                  Prazo e horário
                 </label>
 
                 <input
                   id="project-task-due-date"
-                  type="date"
+                  type="datetime-local"
                   value={prazo}
                   onChange={(event) => setPrazo(event.target.value)}
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none focus:border-primary"

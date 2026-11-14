@@ -556,6 +556,8 @@ export default function AppShell({
           projects={globalProjects}
           userId={globalUserId}
           onClose={() => setIsGlobalTaskOpen(false)}
+          onRequestCreateProject={() => { setIsGlobalTaskOpen(false); setIsGlobalProjectOpen(true); }}
+          onCreated={(task) => { setIsGlobalTaskOpen(false); router.push(`/projects/${task.id_projeto}/tasks`); }}
         />
       )}
     </div>

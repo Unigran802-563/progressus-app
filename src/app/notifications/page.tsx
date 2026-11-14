@@ -13,13 +13,13 @@ import { supabase } from '@/lib/supabase';
 type Notification = { id: string; title: string; description: string; href: string; kind: 'overdue' | 'dueSoon' | 'chat'; createdAt: string };
 type Preferences = { overdue: boolean; dueSoon: boolean };
 
-function dateLabel(date: string | null) { return date ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${date}T00:00:00`)) : 'sem prazo'; }
+function dateLabel(date: string | null) { return date ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(date)) : 'sem prazo'; }
 function buildNotifications(tasks: MinhaTarefa[], preferences: Preferences): Notification[] {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = new Date();
   const soon = new Date(today); soon.setDate(soon.getDate() + 1);
   return tasks.flatMap<Notification>((task) => {
     if (!task.prazo || task.status_nome.toLocaleLowerCase('pt-BR').includes('concl')) return [];
-    const due = new Date(`${task.prazo}T00:00:00`);
+    const due = new Date(task.prazo);
     if (due < today && preferences.overdue) return [{ id: `overdue-${task.id_tarefa}`, title: 'Tarefa atrasada', description: `${task.nome} venceu em ${dateLabel(task.prazo)}.`, href: `/projects/${task.id_projeto}`, kind: 'overdue', createdAt: task.prazo }];
     if (due >= today && due <= soon && preferences.dueSoon) return [{ id: `soon-${task.id_tarefa}`, title: 'Prazo próximo', description: `${task.nome} vence em ${dateLabel(task.prazo)}.`, href: `/projects/${task.id_projeto}`, kind: 'dueSoon', createdAt: task.prazo }];
     return [];

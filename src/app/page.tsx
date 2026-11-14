@@ -17,12 +17,13 @@ import {
 } from "lucide-react";
 
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
+import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader, Panel } from "@/components/ui/progressus-ui";
-import { createProject, listProjects } from "@/lib/projects";
+import { createProject, listAccessibleProjects } from "@/lib/projects";
 import { obterMetricasTarefas, type TaskMetrics } from "@/lib/tasks";
 import { supabase } from "@/lib/supabase";
-import type { CreateProjectData, Project } from "@/types";
+import type { AccessibleProject, CreateProjectData, Project } from "@/types";
 
 const metrics = [
   {
@@ -62,13 +63,17 @@ export default function HomePage() {
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   const [projectError, setProjectError] = useState("");
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
+  const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
+  const [accessibleProjects, setAccessibleProjects] = useState<AccessibleProject[]>([]);
   const [notice, setNotice] = useState("");
 
   const loadProjects = useCallback(async () => {
     try {
       setIsProjectsLoading(true);
       setProjectError("");
-      setProjects(await listProjects());
+      const accessible = await listAccessibleProjects();
+      setAccessibleProjects(accessible);
+      setProjects(accessible.filter((project) => !project.archivedAt).map(({ myRole: _myRole, owner: _owner, ...project }) => project));
     } catch (error) {
       setProjectError(
         error instanceof Error
@@ -165,6 +170,7 @@ export default function HomePage() {
     const project = await createProject(data);
 
     setProjects((currentProjects) => [project, ...currentProjects]);
+    void loadProjects();
     setIsNewProjectDialogOpen(false);
     showNotice("Projeto criado com sucesso.");
   }
@@ -218,7 +224,7 @@ export default function HomePage() {
           />
           <button
             type="button"
-            onClick={() => router.push("/tasks")}
+            onClick={() => setIsNewTaskDialogOpen(true)}
             className="glow-accent inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-px"
           >
             <Plus className="size-4" aria-hidden="true" />
@@ -395,6 +401,15 @@ export default function HomePage() {
         open={isNewProjectDialogOpen}
         onClose={() => setIsNewProjectDialogOpen(false)}
         onCreate={handleCreateProject}
+      />
+
+      <CreateTaskDialog
+        open={isNewTaskDialogOpen}
+        projects={accessibleProjects}
+        userId={user?.id ?? ""}
+        onClose={() => setIsNewTaskDialogOpen(false)}
+        onCreated={(task) => { setIsNewTaskDialogOpen(false); router.push(`/projects/${task.id_projeto}/tasks`); }}
+        onRequestCreateProject={() => { setIsNewTaskDialogOpen(false); setIsNewProjectDialogOpen(true); }}
       />
 
       {notice && (

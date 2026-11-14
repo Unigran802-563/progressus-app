@@ -24,6 +24,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const passwordChecks = [
+    { label: 'Mínimo de 8 caracteres', valid: formData.password.length >= 8 },
+    { label: 'Pelo menos uma letra maiúscula', valid: /[A-Z]/.test(formData.password) },
+    { label: 'Pelo menos uma letra minúscula', valid: /[a-z]/.test(formData.password) },
+    { label: 'Pelo menos um número', valid: /\d/.test(formData.password) },
+    { label: 'Pelo menos um caractere especial', valid: /[^A-Za-z0-9]/.test(formData.password) },
+    {
+      label: 'As senhas coincidem',
+      valid: confirmPassword.length > 0 && formData.password === confirmPassword,
+    },
+  ];
+
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
 
@@ -157,6 +169,21 @@ export default function RegisterPage() {
           <p className="text-[11px] leading-4 text-muted-foreground">
             Mínimo de 8 caracteres, uma maiúscula, um número e um caractere especial.
           </p>
+          <ul aria-live="polite" aria-label="Requisitos da senha" className="grid gap-1 pt-1 text-[11px] leading-4">
+            {passwordChecks.map((rule) => (
+              <li key={rule.label} className={`flex items-center gap-2 ${rule.valid ? 'text-success' : 'text-muted-foreground'}`}>
+                <span
+                  className={`grid size-4 shrink-0 place-items-center rounded-full border ${
+                    rule.valid ? 'border-success bg-success text-background' : 'border-muted-foreground/60'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {rule.valid && <Check className="size-3" strokeWidth={3} />}
+                </span>
+                <span>{rule.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="space-y-1">

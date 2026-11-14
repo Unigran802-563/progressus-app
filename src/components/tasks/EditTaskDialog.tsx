@@ -32,13 +32,22 @@ const priorities: TarefaPrioridade[] = ['Baixa', 'Media', 'Alta'];
 const focusClass = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 const inputClass = 'h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60';
 
+function toLocalDateTimeInput(value: string) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T09:00`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localDateTimeToIso(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
+
 function isRealDate(value: string) {
   if (!value) return true;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return year > 0 && Number.isFinite(date.getTime())
-    && date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) && Number.isFinite(new Date(value).getTime());
 }
 
 async function readTaskContext(taskId: string, userId: string): Promise<TaskContext> {
@@ -154,7 +163,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
           setStatusId(next.task.id_status ?? '');
           // Não normalizar valores históricos nem atribuir automaticamente outro usuário.
           setPriority(next.task.prioridade ?? '');
-          setDueDate(next.task.prazo ?? '');
+          setDueDate(toLocalDateTimeInput(next.task.prazo ?? ''));
           setResponsibleId(next.task.id_usuario ?? '');
           setContext(next);
           initialized = true;
@@ -303,7 +312,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
     if (saveRef.current || busy || !editable || !currentContext) return;
     if (!name.trim()) { setError('Informe o nome da tarefa.'); nameRef.current?.focus(); return; }
     if (!statusValid) { setError('Selecione um status existente do projeto.'); return; }
-    if (!dateValid) { setError('Informe um prazo válido, com uma data real.'); return; }
+    if (!dateValid) { setError('Informe um prazo válido, com data e horário.'); return; }
     if (!responsibleValid) { setError('Selecione um participante ativo ou a opção Sem responsável.'); return; }
     if (!priorityValid) { setError('Selecione uma prioridade válida.'); return; }
 
@@ -340,7 +349,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       if (description !== (original.descricao ?? '')) payload.descricao = description;
       if (statusId !== original.id_status) payload.id_status = statusId;
       if (priority !== (original.prioridade ?? '')) payload.prioridade = priority as TarefaPrioridade;
-      if (dueDate !== (original.prazo ?? '')) payload.prazo = dueDate || null;
+      if (dueDate !== (original.prazo ?? '')) payload.prazo = localDateTimeToIso(dueDate);
       if (responsibleChanged) payload.id_usuario = responsibleId || null;
       if (Object.keys(payload).length === 0) {
         if (isCurrent()) { callbacksRef.current.onSaved?.(fresh.task); callbacksRef.current.onClose(); }
@@ -439,7 +448,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
                   <div className="space-y-2"><label htmlFor={`${id}-priority`} className="text-sm font-medium text-foreground">Prioridade</label><select id={`${id}-priority`} value={priority} onChange={(event) => setPriority(event.target.value)} className={inputClass}>{!priorities.includes(priority as TarefaPrioridade) && <option value={priority} disabled>{priority ? `Prioridade atual: ${priority}` : 'Sem prioridade'}</option>}<option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select></div>
                 </div>
                 <div className="space-y-2"><label htmlFor={`${id}-responsible`} className="text-sm font-medium text-foreground">Responsável</label><select id={`${id}-responsible`} value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} aria-invalid={unavailableSelection || undefined} className={inputClass}><option value="">Sem responsável</option>{historicalResponsible && <option value={originalResponsibleId} disabled={responsibleId !== originalResponsibleId}>Usuário excluído (responsável anterior)</option>}{unavailableSelection && <option value={responsibleId} disabled>Participante indisponível</option>}{currentContext.participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select>{historicalResponsible && <p className="text-sm text-muted-foreground">O responsável anterior será preservado se você não alterar este campo.</p>}</div>
-                <div className="space-y-2"><label htmlFor={`${id}-due-date`} className="text-sm font-medium text-foreground">Prazo <span className="text-muted-foreground">(opcional)</span></label><input id={`${id}-due-date`} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-invalid={!dateValid || undefined} aria-describedby={!dateValid ? `${id}-date-error` : undefined} className={inputClass} />{!dateValid && <p id={`${id}-date-error`} className="text-sm text-danger">Informe um prazo válido, com uma data real.</p>}</div>
+                <div className="space-y-2"><label htmlFor={`${id}-due-date`} className="text-sm font-medium text-foreground">Prazo e horário <span className="text-muted-foreground">(opcional)</span></label><input id={`${id}-due-date`} type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-invalid={!dateValid || undefined} aria-describedby={!dateValid ? `${id}-date-error` : undefined} className={inputClass} />{!dateValid && <p id={`${id}-date-error`} className="text-sm text-danger">Informe um prazo válido, com data e horário.</p>}</div>
               </fieldset>
             </form>
           )}
