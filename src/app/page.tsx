@@ -21,7 +21,7 @@ import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader, Panel } from "@/components/ui/progressus-ui";
 import { createProject, listAccessibleProjects } from "@/lib/projects";
-import { obterMetricasTarefas, type TaskMetrics } from "@/lib/tasks";
+import { listarMinhasTarefas, obterMetricasTarefas, type MinhaTarefa, type TaskMetrics } from "@/lib/tasks";
 import { supabase } from "@/lib/supabase";
 import type { AccessibleProject, CreateProjectData, Project } from "@/types";
 
@@ -48,6 +48,19 @@ function formatProjectDate(date: string): string {
   }).format(new Date(date));
 }
 
+function formatActivityDate(date: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
+function isCompleted(status: string | null | undefined): boolean {
+  return Boolean(status?.toLocaleLowerCase("pt-BR").includes("concl"));
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -65,6 +78,9 @@ export default function HomePage() {
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
   const [accessibleProjects, setAccessibleProjects] = useState<AccessibleProject[]>([]);
+  const [dashboardTasks, setDashboardTasks] = useState<MinhaTarefa[]>([]);
+  const [projectDeadlines, setProjectDeadlines] = useState<Record<string, string | null>>({});
+  const [isDashboardDataLoading, setIsDashboardDataLoading] = useState(true);
   const [notice, setNotice] = useState("");
 
   const loadProjects = useCallback(async () => {
@@ -73,7 +89,18 @@ export default function HomePage() {
       setProjectError("");
       const accessible = await listAccessibleProjects();
       setAccessibleProjects(accessible);
-      setProjects(accessible.filter((project) => !project.archivedAt).map(({ myRole: _myRole, owner: _owner, ...project }) => project));
+      const activeProjects = accessible.filter((project) => !project.archivedAt);
+      setProjects(activeProjects.map(({ myRole: _myRole, owner: _owner, ...project }) => project));
+      if (activeProjects.length > 0) {
+        const { data: deadlineRows, error: deadlineError } = await supabase
+          .from("projeto")
+          .select("id_projeto, prazo")
+          .in("id_projeto", activeProjects.map((project) => project.id));
+        if (deadlineError) throw deadlineError;
+        setProjectDeadlines(Object.fromEntries((deadlineRows ?? []).map((row) => [row.id_projeto, row.prazo])));
+      } else {
+        setProjectDeadlines({});
+      }
     } catch (error) {
       setProjectError(
         error instanceof Error
@@ -84,6 +111,19 @@ export default function HomePage() {
       setIsProjectsLoading(false);
     }
   }, []);
+
+  const loadDashboardData = useCallback(async () => {
+    if (!user) return;
+    try {
+      setIsDashboardDataLoading(true);
+      setDashboardTasks(await listarMinhasTarefas(user.id, { includeCreated: true }));
+    } catch (error) {
+      console.error("Não foi possível carregar as atividades do Dashboard.", error);
+      setDashboardTasks([]);
+    } finally {
+      setIsDashboardDataLoading(false);
+    }
+  }, [user]);
 
   const loadTaskMetrics = useCallback(async (showLoading = true) => {
     try {
@@ -125,13 +165,21 @@ export default function HomePage() {
   }, [loadProjects, loadTaskMetrics, router]);
 
   useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
+  useEffect(() => {
     function refreshMetrics() {
       void loadTaskMetrics();
     }
 
     window.addEventListener("progressus:tasks-changed", refreshMetrics);
-    return () => window.removeEventListener("progressus:tasks-changed", refreshMetrics);
-  }, [loadTaskMetrics]);
+    window.addEventListener("progressus:tasks-changed", loadDashboardData);
+    return () => {
+      window.removeEventListener("progressus:tasks-changed", refreshMetrics);
+      window.removeEventListener("progressus:tasks-changed", loadDashboardData);
+    };
+  }, [loadDashboardData, loadTaskMetrics]);
 
   useEffect(() => {
     function refreshAccess(event: Event) {
@@ -179,6 +227,46 @@ export default function HomePage() {
     await supabase.auth.signOut();
     router.replace("/auth/login");
   }
+
+  const recentActivities = [
+    ...projects.map((project) => ({
+      id: `project-${project.id}`,
+      title: project.name,
+      description: "Projeto disponível para acompanhamento",
+      date: project.createdAt,
+      href: `/projects/${project.id}`,
+      icon: FolderKanban,
+    })),
+    ...dashboardTasks.map((task) => ({
+      id: `task-${task.id_tarefa}`,
+      title: task.nome,
+      description: `${task.projeto_nome} · ${task.status_nome}`,
+      date: task.created_at,
+      href: `/projects/${task.id_projeto}/tasks`,
+      icon: ListChecks,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+
+  const upcomingDeliveries = [
+    ...projects
+      .filter((project) => projectDeadlines[project.id] && new Date(projectDeadlines[project.id] as string) >= new Date())
+      .map((project) => ({
+        id: `project-${project.id}`,
+        title: project.name,
+        description: "Prazo do projeto",
+        date: projectDeadlines[project.id] as string,
+        href: `/projects/${project.id}`,
+      })),
+    ...dashboardTasks
+      .filter((task) => task.prazo && !isCompleted(task.status_nome) && new Date(task.prazo) >= new Date())
+      .map((task) => ({
+        id: `task-${task.id_tarefa}`,
+        title: task.nome,
+        description: `${task.projeto_nome} · ${task.status_nome}`,
+        date: task.prazo as string,
+        href: `/projects/${task.id_projeto}/tasks`,
+      })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 5);
 
   if (isLoading) {
     return (
@@ -380,19 +468,38 @@ export default function HomePage() {
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_1fr]">
           <Panel title="Atividade recente" bodyClassName="p-0">
-            <EmptyState
-              icon={<ListChecks className="size-6" aria-hidden="true" />}
-              title="Nenhuma atividade registrada"
-              description="As atualizações dos seus projetos e tarefas aparecerão aqui."
-            />
+            {isDashboardDataLoading ? (
+              <div className="flex min-h-52 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin text-primary" />Carregando atividades...</div>
+            ) : recentActivities.length === 0 ? (
+              <EmptyState icon={<ListChecks className="size-6" aria-hidden="true" />} title="Nenhuma atividade registrada" description="As atualizações dos seus projetos e tarefas aparecerão aqui." />
+            ) : (
+              <div className="divide-y divide-border">
+                {recentActivities.map((activity) => {
+                  const Icon = activity.icon;
+                  return <button key={activity.id} type="button" onClick={() => router.push(activity.href)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-4" aria-hidden="true" /></span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{activity.title}</span><span className="block truncate text-xs text-muted-foreground">{activity.description}</span></span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">{formatActivityDate(activity.date)}</span>
+                  </button>;
+                })}
+              </div>
+            )}
           </Panel>
 
           <Panel title="Próximas entregas" bodyClassName="p-0">
-            <EmptyState
-              icon={<CalendarClock className="size-6" aria-hidden="true" />}
-              title="Nenhuma entrega próxima"
-              description="Os prazos dos seus projetos serão exibidos neste painel."
-            />
+            {isDashboardDataLoading ? (
+              <div className="flex min-h-52 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin text-primary" />Carregando prazos...</div>
+            ) : upcomingDeliveries.length === 0 ? (
+              <EmptyState icon={<CalendarClock className="size-6" aria-hidden="true" />} title="Nenhuma entrega próxima" description="Cadastre um prazo em um projeto ou tarefa para exibi-lo aqui." />
+            ) : (
+              <div className="divide-y divide-border">
+                {upcomingDeliveries.map((delivery) => <button key={delivery.id} type="button" onClick={() => router.push(delivery.href)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-warning/10 text-warning"><CalendarClock className="size-4" aria-hidden="true" /></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{delivery.title}</span><span className="block truncate text-xs text-muted-foreground">{delivery.description}</span></span>
+                  <span className="shrink-0 text-right text-[11px] text-muted-foreground">{formatActivityDate(delivery.date)}</span>
+                </button>)}
+              </div>
+            )}
           </Panel>
         </section>
       </div>

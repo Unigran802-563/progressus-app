@@ -11,6 +11,14 @@ function throwIfError(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
+function validateFutureDueDate(value: string | null | undefined) {
+  if (!value) return;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isNaN(timestamp) && timestamp < Date.now()) {
+    throw new Error('A tarefa não pode ter um prazo anterior à data e ao horário atuais.');
+  }
+}
+
 type NamedRelation = { nome: string } | { nome: string }[] | null;
 
 function relatedName(relation: NamedRelation | undefined): string | undefined {
@@ -163,6 +171,7 @@ export async function buscarTarefa(idTarefa: string): Promise<Tarefa | null> {
 }
 
 export async function criarTarefa(dados: CriarTarefaData): Promise<Tarefa> {
+  validateFutureDueDate(dados.prazo);
   const { data, error } = await supabase
     .from('tarefa')
     .insert({
@@ -182,6 +191,7 @@ export async function criarTarefa(dados: CriarTarefaData): Promise<Tarefa> {
 }
 
 export async function atualizarTarefa(idTarefa: string, dados: AtualizarTarefaData): Promise<Tarefa> {
+  validateFutureDueDate(dados.prazo);
   const payload: Record<string, unknown> = {};
   if (dados.id_status !== undefined) payload.id_status = dados.id_status;
   if (dados.id_usuario !== undefined) payload.id_usuario = dados.id_usuario;

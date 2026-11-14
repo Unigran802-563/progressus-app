@@ -22,6 +22,11 @@ function localDateTimeToIso(value: string) {
   return value ? new Date(value).toISOString() : null;
 }
 
+function isPastDueDate(value: string) {
+  const timestamp = new Date(value).getTime();
+  return Boolean(value && !Number.isNaN(timestamp) && timestamp < Date.now());
+}
+
 type CreateTaskDialogProps = {
   open: boolean;
   // Quando informado, preserva o vínculo do botão Criar tarefa de um projeto.
@@ -61,6 +66,7 @@ export default function CreateTaskDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [noProjectNoticeOpen, setNoProjectNoticeOpen] = useState(false);
+  const [pastDueDateNoticeOpen, setPastDueDateNoticeOpen] = useState(false);
 
   const editableProjects = projects.filter((project) => project.myRole !== 'viewer' && !project.archivedAt);
   const activeProjectId = projectId || selectedProjectId;
@@ -74,8 +80,10 @@ export default function CreateTaskDialog({
       setName('');
       setDescription('');
       setPriority('Media');
-      setDueDate(initialDueDate);
+      const initialDateIsPast = isPastDueDate(initialDueDate);
+      setDueDate(initialDateIsPast ? '' : initialDueDate);
       setError('');
+      setPastDueDateNoticeOpen(initialDateIsPast);
     }
   }, [initialDueDate, open]);
 
@@ -128,6 +136,16 @@ export default function CreateTaskDialog({
     setError('');
   }
 
+  function changeDueDate(value: string) {
+    if (isPastDueDate(value)) {
+      setDueDate('');
+      setError('');
+      setPastDueDateNoticeOpen(true);
+      return;
+    }
+    setDueDate(value);
+  }
+
   useProjectParticipantsRefresh(activeProjectId, open, (eligible) => {
     setParticipants(eligible);
     setResponsibleId((current) => eligible.some((member) => member.userId === current) ? current : '');
@@ -162,6 +180,11 @@ export default function CreateTaskDialog({
     }
     if (!userId) {
       setError('Usuário não autenticado.');
+      return;
+    }
+    if (isPastDueDate(dueDate)) {
+      setDueDate('');
+      setPastDueDateNoticeOpen(true);
       return;
     }
 
@@ -221,7 +244,7 @@ export default function CreateTaskDialog({
             <div className="space-y-2"><label htmlFor="task-priority" className="text-sm font-medium text-foreground">Prioridade</label><select id="task-priority" value={priority} onChange={(event) => setPriority(event.target.value as TarefaPrioridade)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="Baixa">Baixa</option><option value="Media">Média</option><option value="Alta">Alta</option></select></div>
           </div>
           <div className="space-y-2"><label htmlFor="task-responsible" className="text-sm font-medium text-foreground">Responsável <span className="text-danger">*</span></label><select id="task-responsible" aria-required="true" value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} disabled={saving || !projectDataReady || participants.length === 0} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground"><option value="">{loadingStatuses ? 'Carregando...' : !activeProjectId ? 'Selecione o projeto primeiro' : 'Selecione o responsável'}</option>{participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select></div>
-          <div className="space-y-2"><label htmlFor="task-due-date" className="text-sm font-medium text-foreground">Prazo e horário <span className="text-muted-foreground">(opcional)</span></label><input id="task-due-date" type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div>
+          <div className="space-y-2"><label htmlFor="task-due-date" className="text-sm font-medium text-foreground">Prazo e horário <span className="text-muted-foreground">(opcional)</span></label><input id="task-due-date" type="datetime-local" value={dueDate} min={toLocalDateTimeInput(new Date().toISOString())} onChange={(event) => changeDueDate(event.target.value)} disabled={saving} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground" /></div>
           {error && <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={saving} className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Cancelar</button><button type="submit" disabled={!canSubmit} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100">{saving && <Loader2 className="size-4 animate-spin" />}{saving ? 'Criando...' : 'Criar tarefa'}</button></div>
         </form>
@@ -237,6 +260,17 @@ export default function CreateTaskDialog({
       pending={false}
       onClose={() => { setNoProjectNoticeOpen(false); onClose(); }}
       onConfirm={() => { setNoProjectNoticeOpen(false); onClose(); onRequestCreateProject?.(); }}
+    />
+    <ProjectConfirmationDialog
+      open={pastDueDateNoticeOpen}
+      title="Prazo inválido"
+      description="A tarefa não pode ter um prazo anterior à data e ao horário atuais. Escolha uma data futura para continuar."
+      icon={<TriangleAlert className="size-5" aria-hidden="true" />}
+      confirmLabel="Escolher outro prazo"
+      pendingLabel="Abrindo..."
+      pending={false}
+      onClose={() => setPastDueDateNoticeOpen(false)}
+      onConfirm={() => setPastDueDateNoticeOpen(false)}
     />
     </>
   );
