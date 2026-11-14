@@ -27,6 +27,29 @@ function isPastDueDate(value: string) {
   return Boolean(value && !Number.isNaN(timestamp) && timestamp < Date.now());
 }
 
+function formatLocalDateTime(date: Date) {
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function getInitialDueDate(value: string) {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 1);
+
+  if (!value) return formatLocalDateTime(now);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return isPastDueDate(value) ? '' : toLocalDateTimeInput(value);
+  }
+
+  const selectedDay = new Date(`${value}T12:00:00`);
+  const today = new Date();
+  const isToday = selectedDay.toDateString() === today.toDateString();
+  if (isToday) return formatLocalDateTime(now);
+  if (selectedDay < new Date(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T12:00:00`)) return '';
+  return `${value}T09:00`;
+}
+
 type CreateTaskDialogProps = {
   open: boolean;
   // Quando informado, preserva o vínculo do botão Criar tarefa de um projeto.
@@ -75,15 +98,21 @@ export default function CreateTaskDialog({
   const projectDataReady = Boolean(activeProjectId && loadedProjectId === activeProjectId && !loadingStatuses);
 
   useEffect(() => {
+    if (open) {
+      setDueDate(getInitialDueDate(initialDueDate));
+      setError('');
+      setPastDueDateNoticeOpen(false);
+      return;
+    }
+
     if (!open) {
       setSelectedProjectId('');
       setName('');
       setDescription('');
       setPriority('Media');
-      const initialDateIsPast = isPastDueDate(initialDueDate);
-      setDueDate(initialDateIsPast ? '' : initialDueDate);
+      setDueDate(getInitialDueDate(initialDueDate));
       setError('');
-      setPastDueDateNoticeOpen(initialDateIsPast);
+      setPastDueDateNoticeOpen(false);
     }
   }, [initialDueDate, open]);
 
