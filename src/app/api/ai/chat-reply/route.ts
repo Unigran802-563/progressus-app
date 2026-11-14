@@ -18,6 +18,7 @@ const HISTORY_LIMIT = 12;
 const MAX_MESSAGE_CHARS = 500;
 const MAX_ANSWER_CHARS = 4000;
 const AI_MENTION = /(^|\s)@ia\b/i;
+const CREATE_TASK_COMMAND = /\b(crie|criar|adicione|adicionar|cadastre|cadastrar)\b[\s\S]*\b(tarefa|atividade)\b/i;
 
 type ReplyBody = { chatId?: string };
 
@@ -30,6 +31,13 @@ type MessageRow = {
 
 type MemberRow = { id_usuario: string; nome: string };
 
+type TaskDraft = {
+  nome: string;
+  descricao: string;
+  prioridade: 'Baixa' | 'Media' | 'Alta';
+  prazo: string | null;
+};
+
 type GeminiPayload = {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   error?: { message?: string };
@@ -37,6 +45,26 @@ type GeminiPayload = {
 
 function fail(status: number, error: string, detail?: string) {
   return NextResponse.json({ error, ...(detail ? { detail } : {}) }, { status });
+}
+
+function parseTaskDraft(text: string): TaskDraft {
+  const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+  const value = JSON.parse(cleaned) as Record<string, unknown>;
+  const prioridade = value.prioridade === 'Baixa' || value.prioridade === 'Alta' ? value.prioridade : 'Media';
+  const nome = String(value.nome ?? '').trim();
+  if (!nome) throw new Error('A IA não conseguiu identificar o nome da tarefa.');
+
+  const prazo = typeof value.prazo === 'string' && value.prazo.trim() ? value.prazo.trim() : null;
+  if (prazo && !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(?::\d{2})?)?$/.test(prazo)) {
+    throw new Error('A IA retornou um prazo inválido para a tarefa.');
+  }
+
+  return {
+    nome,
+    descricao: String(value.descricao ?? '').trim(),
+    prioridade,
+    prazo,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -135,6 +163,77 @@ export async function POST(request: NextRequest) {
         projeto: projectResult.data ?? null,
         tarefas: tasksResult.data ?? [],
       };
+
+      if (last.conteudo && CREATE_TASK_COMMAND.test(last.conteudo)) {
+        const { data: statuses, error: statusesError } = await supabase
+          .from('status')
+          .select('id_status, nome, ordem')
+          .eq('id_projeto', projectId)
+          .order('ordem', { ascending: true })
+          .limit(20);
+
+        if (statusesError) throw new Error(statusesError.message);
+        const firstStatus = statuses?.[0] as { id_status: string; nome: string } | undefined;
+        if (!firstStatus) return fail(400, 'Este projeto ainda não possui um status inicial para receber tarefas.');
+
+        const currentDate = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+        const taskPrompt = `Você interpreta um pedido de criação de tarefa no Progressus. Responda somente JSON válido, sem markdown.
+Campos obrigatórios: nome, descricao, prioridade e prazo.
+prioridade deve ser exatamente Baixa, Media ou Alta. prazo deve ser uma data ISO com horário e fuso -03:00, no formato YYYY-MM-DDTHH:mm:00-03:00, ou null.
+Considere a data atual ${currentDate} no fuso do Brasil. Se o usuário informar apenas uma data, use 12:00. Não invente informações. Remova @IA do conteúdo.
+Pedido do usuário: ${last.conteudo}`;
+
+        const taskResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+            signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: taskPrompt }] }] }),
+          },
+        );
+        const taskPayload = (await taskResponse.json().catch(() => ({}))) as GeminiPayload;
+        if (!taskResponse.ok) return fail(502, 'A API Gemini recusou o pedido de criação da tarefa.', taskPayload.error?.message);
+
+        const taskText = taskPayload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+        const draft = parseTaskDraft(taskText);
+        const { data: createdTask, error: insertError } = await supabase
+          .from('tarefa')
+          .insert({
+            id_projeto: projectId,
+            id_status: firstStatus.id_status,
+            id_usuario: userId,
+            nome: draft.nome,
+            descricao: draft.descricao || null,
+            prioridade: draft.prioridade,
+            prazo: draft.prazo,
+          })
+          .select('nome, prioridade, prazo')
+          .single();
+
+        if (insertError) {
+          if (insertError.code === '42501') return fail(403, 'Você não tem permissão para criar tarefas neste projeto.');
+          throw new Error(insertError.message);
+        }
+
+        const projectName = (projectContext as { projeto?: { nome?: string } } | null)?.projeto?.nome ?? 'este projeto';
+        const deadline = createdTask.prazo ? ` com prazo em ${new Date(createdTask.prazo).toLocaleString('pt-BR')}` : '';
+        const answer = `Tarefa criada com sucesso no projeto ${projectName}: ${createdTask.nome} (prioridade ${createdTask.prioridade}, status ${firstStatus.nome}${deadline}).`;
+        const admin = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        });
+        const { error: taskReplyError } = await admin
+          .from('mensagem')
+          .insert({ id_chat: chatId, id_usuario: null, conteudo: answer });
+        if (taskReplyError) throw new Error(`Não foi possível gravar a confirmação da tarefa: ${taskReplyError.message}`);
+
+        return NextResponse.json({ success: true, createdTask: true });
+      }
     }
 
     function senderLabel(message: MessageRow): string {
