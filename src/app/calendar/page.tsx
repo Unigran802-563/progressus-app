@@ -67,6 +67,22 @@ function localDateTimeToIso(value: string) {
   return value ? new Date(value).toISOString() : null;
 }
 
+function initialDateTimeForCalendarDay(value: string) {
+  const selectedDay = fromKey(value);
+  const now = new Date();
+  const pad = (part: number) => String(part).padStart(2, '0');
+
+  if (selectedDay.toDateString() === now.toDateString()) {
+    now.setMinutes(0, 0, 0);
+    now.setHours(now.getHours() + 1);
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  if (selectedDay < new Date(`${dateKey(now)}T00:00:00`)) return '';
+
+  return `${value}T09:00`;
+}
+
 export default function CalendarPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -260,7 +276,7 @@ export default function CalendarPage() {
   }
 
   function openCreate(date: string) {
-    setSelectedDate(date);
+    setSelectedDate(initialDateTimeForCalendarDay(date));
     changeTaskProject('');
     setStatusId('');
     setName('');
