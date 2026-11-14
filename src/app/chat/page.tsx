@@ -431,8 +431,8 @@ function ChatContent() {
       userInitial={userInitial}
       onLogout={handleLogout}
     >
-      <main className="flex h-[calc(100dvh-150px)] min-h-[520px] flex-col bg-background text-foreground">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:flex-row">
+        <main className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background text-foreground">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-surface lg:flex-row">
           {/* Painel de conversas */}
           <aside
             className={`${hasSelection ? "hidden lg:flex" : "flex flex-1 lg:flex-none"} min-h-0 shrink-0 flex-col border-b border-border transition-all duration-300 lg:border-b-0 lg:border-r ${
@@ -450,7 +450,7 @@ function ChatContent() {
                   type="button"
                   onClick={() => setIsSidebarCollapsed(false)}
                   title="Expandir conversas"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-violet-500 transition hover:bg-violet-600 hover:text-white active:bg-violet-700"
+                  className="hidden h-9 w-9 items-center justify-center rounded-lg text-violet-500 transition hover:bg-violet-600 hover:text-white active:bg-violet-700 lg:flex"
                 >
                   <PanelLeftOpen size={19} />
                 </button>
@@ -463,7 +463,7 @@ function ChatContent() {
                       type="button"
                       onClick={() => setIsSidebarCollapsed(true)}
                       title="Recolher conversas"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-violet-500 transition hover:bg-violet-600 hover:text-white active:bg-violet-700"
+                      className="hidden h-8 w-8 items-center justify-center rounded-lg text-violet-500 transition hover:bg-violet-600 hover:text-white active:bg-violet-700 lg:flex"
                     >
                       <PanelLeftClose size={18} />
                     </button>
@@ -488,7 +488,7 @@ function ChatContent() {
 
             {isSidebarCollapsed ? (
               /* Barra de ícones quando recolhida */
-              <div className="flex flex-col items-center gap-3 p-3">
+              <div className="hidden flex-col items-center gap-3 p-3 lg:flex">
                 <button
                   type="button"
                   onClick={() => setIsSidebarCollapsed(false)}
@@ -681,7 +681,7 @@ function ChatContent() {
           </aside>
 
           {/* Área da conversa */}
-          <section className={`${hasSelection ? "flex" : "hidden lg:flex"} min-w-0 flex-1 flex-col`}>
+          <section className={`${hasSelection ? "flex" : "hidden lg:flex"} min-h-0 min-w-0 flex-1 flex-col`}>
             {!hasSelection ? (
               <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">

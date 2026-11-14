@@ -217,7 +217,7 @@ export default function ChatPage({ params }: ChatPageProps) {
         userInitial={userInitial}
         onLogout={handleLogout}
       >
-        <main className="flex h-[calc(100dvh-97px)] min-h-0 flex-col bg-background text-foreground">
+        <main className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background text-foreground">
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
             Erro: {chatError}
           </div>
@@ -232,8 +232,8 @@ export default function ChatPage({ params }: ChatPageProps) {
       userInitial={userInitial}
       onLogout={handleLogout}
     >
-      <main className="flex h-[calc(100dvh-97px)] min-h-0 flex-col bg-background text-foreground">
-        <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface">
+      <main className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background text-foreground">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-surface">
           <ChatSidebar
             projectName={projectName ?? "Projeto"}
             participants={participants}
