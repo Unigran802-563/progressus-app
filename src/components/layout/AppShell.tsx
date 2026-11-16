@@ -130,9 +130,16 @@ export default function AppShell({
   }, []);
 
   useEffect(() => {
+    const pendingMessage = window.sessionStorage.getItem("progressus:pending-success");
+    if (pendingMessage) {
+      window.sessionStorage.removeItem("progressus:pending-success");
+      setSuccessNotice(pendingMessage);
+      window.setTimeout(() => setSuccessNotice(""), 3500);
+    }
     const showSuccess = (event: Event) => {
       const message = (event as CustomEvent<{ message?: string }>).detail?.message;
       if (!message) return;
+      window.sessionStorage.removeItem("progressus:pending-success");
       setSuccessNotice(message);
       window.setTimeout(() => setSuccessNotice(""), 3500);
     };

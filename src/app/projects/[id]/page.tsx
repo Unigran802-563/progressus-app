@@ -41,6 +41,7 @@ import {
   updateProject,
 } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
+import { emitSuccess } from "@/lib/feedback";
 import type {
   CreateProjectData,
   Project,
@@ -252,6 +253,7 @@ export default function ProjectDetailPage() {
     setConfirmationError("");
     try {
       await archiveProject(project.id);
+      emitSuccess("Projeto arquivado com sucesso.");
       setConfirmation(null);
       router.replace("/projects");
     } catch (error) {
@@ -274,6 +276,7 @@ export default function ProjectDetailPage() {
     setConfirmationError("");
     try {
       await moveProjectToTrash(project.id);
+      emitSuccess("Projeto excluído com sucesso e movido para a lixeira.");
       setConfirmation(null);
       router.replace("/projects");
     } catch (error) {

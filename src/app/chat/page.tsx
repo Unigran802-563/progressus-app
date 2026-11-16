@@ -44,7 +44,7 @@ function ChatContent() {
   const searchParams = useSearchParams();
 
   const selectedProjectId = searchParams.get("projectId");
-  const selectedPrivateChatId = searchParams.get("chatId");
+  const selectedPrivateChatId = selectedProjectId ? null : searchParams.get("chatId");
 
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<AccessibleProject[]>([]);
@@ -369,11 +369,11 @@ function ChatContent() {
   );
 
   function handleSelectProject(projectId: string) {
-    router.push(`/chat?projectId=${projectId}`);
+    router.replace(`/chat?projectId=${encodeURIComponent(projectId)}`);
   }
 
   function handleSelectPrivateChat(privateChatId: string) {
-    router.push(`/chat?chatId=${privateChatId}`);
+    router.replace(`/chat?chatId=${encodeURIComponent(privateChatId)}`);
   }
 
   async function handleStartPrivateChat(otherUserId: string) {
@@ -407,7 +407,7 @@ function ChatContent() {
           : [...updatedPrivateChats, newSummary],
       );
 
-      router.push(`/chat?chatId=${chat.id_chat}`);
+      router.replace(`/chat?chatId=${encodeURIComponent(chat.id_chat)}`);
     } catch (err) {
       setError(
         err instanceof Error
@@ -420,7 +420,7 @@ function ChatContent() {
   }
 
   function handleClearSelection() {
-    router.push("/chat");
+    router.replace("/chat");
   }
 
   const hasSelection = Boolean(selectedProjectId || selectedPrivateChatId);
