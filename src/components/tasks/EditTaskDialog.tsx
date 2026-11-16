@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { canEditTask } from '@/lib/task-permissions';
 import { atualizarTarefa, buscarTarefa, excluirTarefa, listarStatus } from '@/lib/tasks';
 import { emitSuccess } from '@/lib/feedback';
+import ProjectConfirmationDialog from '@/components/projects/ProjectConfirmationDialog';
 import type { AtualizarTarefaData, Project, ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from '@/types';
 
 type EditTaskDialogProps = {
@@ -458,16 +459,6 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
 
           {error && <p id={`${id}-error`} className="mt-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger" role="alert">{error}</p>}
           <p className="sr-only" role="status">{saving ? 'Salvando alterações...' : checking ? 'Verificando acesso...' : ''}</p>
-          {confirmDelete && editable && currentContext && (
-            <div className="mt-5 rounded-xl border border-danger/30 bg-danger/10 p-4" role="alertdialog" aria-label="Confirmar exclusão da tarefa">
-              <p className="text-sm font-semibold text-foreground">Excluir esta tarefa?</p>
-              <p className="mt-1 text-sm text-muted-foreground">A tarefa <strong className="text-foreground">{currentContext.task.nome}</strong> será excluída permanentemente e não poderá ser recuperada.</p>
-              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy} className={`h-9 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>Cancelar</button>
-                <button type="button" onClick={() => void handleDelete()} disabled={busy} className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-danger px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>{deleting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{deleting ? 'Excluindo...' : 'Excluir tarefa'}</button>
-              </div>
-            </div>
-          )}
           <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             {editable && !confirmDelete && <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}><Trash2 className="size-4" aria-hidden="true" />Excluir tarefa</button>}
             {!editable && <span />}
@@ -479,6 +470,19 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
           </div>
         </div>
       </section>
+      <ProjectConfirmationDialog
+        open={Boolean(confirmDelete && editable && currentContext)}
+        title="Excluir tarefa?"
+        description={<>A tarefa <strong className="text-foreground">{currentContext?.task.nome}</strong> será excluída permanentemente e não poderá ser recuperada.</>}
+        icon={<Trash2 className="size-5" />}
+        variant="danger"
+        confirmLabel="Excluir tarefa"
+        pendingLabel="Excluindo..."
+        pending={deleting}
+        error={error}
+        onClose={() => { if (!deleting) setConfirmDelete(false); }}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }
