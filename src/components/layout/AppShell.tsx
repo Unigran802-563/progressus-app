@@ -415,7 +415,7 @@ export default function AppShell({
       )}
 
       <div className="flex min-h-screen flex-col lg:pl-[270px]">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
+        <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-background/90 backdrop-blur-xl lg:sticky lg:inset-x-auto">
           <div className="flex items-center gap-3 px-4 py-3 lg:px-8">
             <button
               type="button"
@@ -562,7 +562,7 @@ export default function AppShell({
           </div>
         )}
 
-        <main className="min-h-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="min-h-0 flex-1 px-4 pb-6 pt-20 lg:px-8 lg:py-8">{children}</main>
       </div>
 
       <NewProjectDialog
