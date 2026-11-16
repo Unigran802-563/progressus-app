@@ -20,6 +20,7 @@ type ChatMessagesProps = {
   firstUnreadMessageId?: string | null;
   onEditMessage?: (messageId: string, content: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
+  onDeleteMessageForMe?: (messageId: string) => Promise<void>;
 };
 
 export function ChatMessages({
@@ -30,6 +31,7 @@ export function ChatMessages({
   firstUnreadMessageId = null,
   onEditMessage,
   onDeleteMessage,
+  onDeleteMessageForMe,
 }: ChatMessagesProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -415,6 +417,7 @@ export function ChatMessages({
                     onOpenFile={openFile}
                     onEdit={onEditMessage}
                     onDelete={onDeleteMessage}
+                    onDeleteForMe={onDeleteMessageForMe}
                   />
                 </div>
               </div>

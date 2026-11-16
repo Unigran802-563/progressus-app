@@ -9,6 +9,7 @@ import { canEditTask } from '@/lib/task-permissions';
 import { atualizarTarefa, buscarTarefa, excluirTarefa, listarStatus } from '@/lib/tasks';
 import { emitSuccess } from '@/lib/feedback';
 import ProjectConfirmationDialog from '@/components/projects/ProjectConfirmationDialog';
+import TaskFilesPanel from '@/components/tasks/TaskFilesPanel';
 import type { AtualizarTarefaData, Project, ProjectParticipant, Tarefa, TarefaPrioridade, TarefaStatus } from '@/types';
 
 type EditTaskDialogProps = {
@@ -454,6 +455,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
                 <div className="space-y-2"><label htmlFor={`${id}-responsible`} className="text-sm font-medium text-foreground">Responsável</label><select id={`${id}-responsible`} value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} aria-invalid={unavailableSelection || undefined} className={inputClass}><option value="">Sem responsável</option>{historicalResponsible && <option value={originalResponsibleId} disabled={responsibleId !== originalResponsibleId}>Usuário excluído (responsável anterior)</option>}{unavailableSelection && <option value={responsibleId} disabled>Participante indisponível</option>}{currentContext.participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select>{historicalResponsible && <p className="text-sm text-muted-foreground">O responsável anterior será preservado se você não alterar este campo.</p>}</div>
                 <div className="space-y-2"><label htmlFor={`${id}-due-date`} className="text-sm font-medium text-foreground">Prazo e horário <span className="text-muted-foreground">(opcional)</span></label><input id={`${id}-due-date`} type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-invalid={!dateValid || undefined} aria-describedby={!dateValid ? `${id}-date-error` : undefined} className={inputClass} />{!dateValid && <p id={`${id}-date-error`} className="text-sm text-danger">Informe um prazo válido, com data e horário.</p>}</div>
               </fieldset>
+              {currentContext && <TaskFilesPanel taskId={currentContext.task.id_tarefa} projectId={currentContext.task.id_projeto} disabled={busy} />}
             </form>
           )}
 

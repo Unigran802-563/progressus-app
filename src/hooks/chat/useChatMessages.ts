@@ -7,6 +7,7 @@ import {
   sendChatMessage,
   updateChatMessage,
   deleteChatMessage,
+  hideChatMessageForMe,
   uploadChatFile,
   markChatMessagesAsRead,
 } from "@/lib/chat";
@@ -32,7 +33,7 @@ type UseChatMessagesReturn = {
     mentions: ChatMentionDraft[],
   ) => Promise<void>;
   editMessage: (messageId: string, content: string) => Promise<void>;
-  removeMessage: (messageId: string) => Promise<void>;
+  removeMessage: (messageId: string, mode?: 'all' | 'me') => Promise<void>;
 };
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -185,7 +186,7 @@ export function useChatMessages(
       setIsLoading(true);
       setError(null);
 
-      const data = await listChatMessages(chatId);
+      const data = await listChatMessages(chatId, userId ?? undefined);
 
       if (
         currentChatIdRef.current !== chatId ||
@@ -232,13 +233,13 @@ export function useChatMessages(
         setIsLoading(false);
       }
     }
-  }, [chatId, captureFirstUnreadMessage, markMessagesAsRead]);
+  }, [chatId, userId, captureFirstUnreadMessage, markMessagesAsRead]);
 
   const refreshMessages = useCallback(async () => {
     if (!chatId) return;
 
     try {
-      const data = await listChatMessages(chatId);
+      const data = await listChatMessages(chatId, userId ?? undefined);
 
       if (currentChatIdRef.current !== chatId) return;
 
@@ -249,7 +250,7 @@ export function useChatMessages(
     } catch (err) {
       console.error("Erro ao atualizar mensagens:", err);
     }
-  }, [chatId, markMessagesAsRead]);
+  }, [chatId, userId, markMessagesAsRead]);
 
   useEffect(() => {
     void loadMessages();
@@ -454,8 +455,9 @@ export function useChatMessages(
     messagesRef.current = messagesRef.current.map((message) => message.id_mensagem === messageId ? { ...message, ...updated } : message);
   }
 
-  async function removeMessage(messageId: string) {
-    await deleteChatMessage(messageId);
+  async function removeMessage(messageId: string, mode: 'all' | 'me' = 'all') {
+    if (mode === 'me') await hideChatMessageForMe(messageId);
+    else await deleteChatMessage(messageId);
     setMessages((current) => current.filter((message) => message.id_mensagem !== messageId));
     messagesRef.current = messagesRef.current.filter((message) => message.id_mensagem !== messageId);
   }

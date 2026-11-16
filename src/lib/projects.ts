@@ -16,6 +16,7 @@ type ProjectRow = {
   descricao: string | null;
   created_at: string;
   arquivado_em: string | null;
+  excluido_em?: string | null;
 };
 
 type AccessibleProjectRow = ProjectRow & {
@@ -54,6 +55,7 @@ function mapProject(row: ProjectRow): Project {
     description: row.descricao,
     createdAt: row.created_at,
     archivedAt: row.arquivado_em,
+    deletedAt: row.excluido_em ?? null,
   };
 }
 
@@ -102,6 +104,7 @@ export async function listAccessibleProjects(
 }
 
 export async function listTrashProjects(): Promise<AccessibleProject[]> {
+  await supabase.rpc('purge_expired_project_trash');
   const { data, error } = await supabase.rpc('list_trash_projects');
 
   if (error) {
@@ -109,6 +112,11 @@ export async function listTrashProjects(): Promise<AccessibleProject[]> {
   }
 
   return ((data ?? []) as AccessibleProjectRow[]).map(mapAccessibleProject);
+}
+
+export async function permanentlyDeleteProject(projectId: string): Promise<void> {
+  const { error } = await supabase.rpc('permanently_delete_project', { p_project_id: projectId });
+  if (error) throw new Error(error.message);
 }
 
 export async function listProjects(

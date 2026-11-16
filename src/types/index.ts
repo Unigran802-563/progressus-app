@@ -39,6 +39,7 @@ export type Project = {
   dueDate?: string | null;
   createdAt: string;
   archivedAt: string | null;
+  deletedAt?: string | null;
 };
 
 export type ProjectMember = {

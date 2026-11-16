@@ -15,6 +15,7 @@ type ChatMessageProps = {
   onOpenFile: (file: ChatFile) => void;
   onEdit?: (messageId: string, content: string) => Promise<void>;
   onDelete?: (messageId: string) => Promise<void>;
+  onDeleteForMe?: (messageId: string) => Promise<void>;
 };
 
 function renderMessageContent(
@@ -78,6 +79,7 @@ export function ChatMessage({
   onOpenFile,
   onEdit,
   onDelete,
+  onDeleteForMe,
 }: ChatMessageProps) {
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
@@ -85,6 +87,7 @@ export function ChatMessage({
   const [menuOpen, setMenuOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'all' | 'me'>('all');
 
   useEffect(() => {
     async function loadFileUrls() {
@@ -129,11 +132,12 @@ export function ChatMessage({
   }
 
   async function remove() {
-    if (!onDelete) return;
+    const action = deleteMode === 'me' ? onDeleteForMe : onDelete;
+    if (!action) return;
     setSaving(true);
     try {
-      await onDelete(message.id_mensagem);
-      emitSuccess("Mensagem excluída com sucesso.");
+      await action(message.id_mensagem);
+      emitSuccess(deleteMode === 'me' ? "Mensagem removida para você." : "Mensagem excluída para todos.");
       setDeleteDialogOpen(false);
       setMenuOpen(false);
     } finally {
@@ -244,18 +248,19 @@ export function ChatMessage({
             <button type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Ações da mensagem" className="grid size-8 place-items-center rounded-lg text-current/60 transition hover:bg-black/10 hover:text-current"><Ellipsis className="size-4" /></button>
             {menuOpen && <div className="absolute right-0 top-9 z-20 min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl">
               {onEdit && <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Pencil className="size-3.5" />Editar</button>}
-              {onDelete && <button type="button" onClick={() => { setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar</button>}
+              {onDeleteForMe && <button type="button" onClick={() => { setDeleteMode('me'); setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Trash2 className="size-3.5" />Apagar para mim</button>}
+              {onDelete && new Date(message.data_hora).getTime() >= Date.now() - 60 * 60 * 1000 && <button type="button" onClick={() => { setDeleteMode('all'); setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar para todos</button>}
             </div>}
           </div>
         )}
       </div>
       <ProjectConfirmationDialog
         open={deleteDialogOpen}
-        title="Apagar mensagem?"
-        description="Esta mensagem será removida da conversa e não poderá ser recuperada."
+        title={deleteMode === 'me' ? 'Apagar mensagem para você?' : 'Apagar mensagem para todos?'}
+        description={deleteMode === 'me' ? 'A mensagem será ocultada somente para você.' : 'A mensagem será removida da conversa para todos. Essa opção só fica disponível até 1 hora após o envio.'}
         icon={<Trash2 className="size-5" aria-hidden="true" />}
         variant="danger"
-        confirmLabel="Apagar mensagem"
+        confirmLabel={deleteMode === 'me' ? 'Apagar para mim' : 'Apagar para todos'}
         pendingLabel="Apagando..."
         pending={saving}
         onClose={() => setDeleteDialogOpen(false)}

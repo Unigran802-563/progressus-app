@@ -151,7 +151,7 @@ export async function listPrivateChats(
   }));
 }
 
-export async function listChatMessages(chatId: string): Promise<ChatMessage[]> {
+export async function listChatMessages(chatId: string, userId?: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("mensagem")
     .select(
@@ -185,6 +185,16 @@ export async function listChatMessages(chatId: string): Promise<ChatMessage[]> {
     throw new Error(error.message);
   }
 
+  let hiddenIds = new Set<string>();
+  if (userId) {
+    const { data: hidden, error: hiddenError } = await supabase
+      .from('mensagem_oculta')
+      .select('id_mensagem')
+      .eq('id_usuario', userId);
+    if (hiddenError) throw new Error(hiddenError.message);
+    hiddenIds = new Set((hidden ?? []).map((item) => item.id_mensagem as string));
+  }
+
   return (
     (data ?? []) as Array<
       ChatMessage & {
@@ -192,7 +202,7 @@ export async function listChatMessages(chatId: string): Promise<ChatMessage[]> {
         mensagem_mencao?: ChatMention[];
       }
     >
-  ).map((message) => ({
+  ).filter((message) => !hiddenIds.has(message.id_mensagem)).map((message) => ({
     ...message,
     arquivos: message.arquivo ?? [],
     menções: (message.mensagem_mencao ?? []) as ChatMention[],
@@ -250,11 +260,12 @@ export async function updateChatMessage(
 }
 
 export async function deleteChatMessage(messageId: string): Promise<void> {
-  const { error } = await supabase
-    .from("mensagem")
-    .delete()
-    .eq("id_mensagem", messageId);
+  const { error } = await supabase.rpc('delete_message_for_all', { p_message_id: messageId });
+  if (error) throw new Error(error.message);
+}
 
+export async function hideChatMessageForMe(messageId: string): Promise<void> {
+  const { error } = await supabase.rpc('hide_message_for_me', { p_message_id: messageId });
   if (error) throw new Error(error.message);
 }
 

@@ -736,6 +736,7 @@ function ChatContent() {
                   firstUnreadMessageId={firstUnreadMessageId}
                   onEditMessage={editMessage}
                   onDeleteMessage={removeMessage}
+                  onDeleteMessageForMe={(messageId) => removeMessage(messageId, 'me')}
                 />
 
                 {messageError && (

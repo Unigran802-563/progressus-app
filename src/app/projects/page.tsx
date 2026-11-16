@@ -15,14 +15,16 @@ import {
   Plus,
   Search,
   TriangleAlert,
+  Trash2,
   UserRound,
 } from "lucide-react";
 
 import NewProjectDialog from "@/components/projects/NewProjectDialog";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
+import ProjectConfirmationDialog from "@/components/projects/ProjectConfirmationDialog";
 import AppShell from "@/components/layout/AppShell";
 import { EmptyState, PageHeader } from "@/components/ui/progressus-ui";
-import { createProject, listAccessibleProjects, listTrashProjects, restoreArchivedProject, restoreProjectFromTrash } from "@/lib/projects";
+import { createProject, listAccessibleProjects, listTrashProjects, permanentlyDeleteProject, restoreArchivedProject, restoreProjectFromTrash } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import type { AccessibleProject, CreateProjectData } from "@/types";
 
@@ -103,6 +105,8 @@ export default function ProjectsPage() {
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [taskProject, setTaskProject] = useState<AccessibleProject | null>(null);
   const [notice, setNotice] = useState("");
+  const [projectToDelete, setProjectToDelete] = useState<AccessibleProject | null>(null);
+  const [deletingProject, setDeletingProject] = useState(false);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -250,6 +254,19 @@ export default function ProjectsPage() {
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Não foi possível restaurar o projeto arquivado.");
     }
+  }
+
+  async function handlePermanentDelete() {
+    if (!projectToDelete) return;
+    try {
+      setDeletingProject(true);
+      await permanentlyDeleteProject(projectToDelete.id);
+      setProjectToDelete(null);
+      await loadProjects();
+      showNotice("Projeto excluído definitivamente.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Não foi possível excluir definitivamente o projeto.");
+    } finally { setDeletingProject(false); }
   }
 
   function openTaskDialog(project: AccessibleProject) {
@@ -508,9 +525,10 @@ export default function ProjectsPage() {
                 </div>
                 </Link>
                 {activeFilter === "trash" ? (
-                  <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
-                    Restaurar projeto
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">Restaurar projeto</button>
+                    <button type="button" onClick={() => setProjectToDelete(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-danger/30 bg-danger/10 px-3 text-xs font-semibold text-danger"><Trash2 className="mr-1.5 size-3.5" />Excluir definitivamente</button>
+                  </div>
                 ) : activeFilter === "archived" && project.myRole === "owner" ? (
                   <button type="button" onClick={() => void handleRestoreArchivedProject(project)} className="inline-flex h-9 items-center justify-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
                     Restaurar projeto
@@ -567,9 +585,10 @@ export default function ProjectsPage() {
                     </span>
                     </Link>
                     {activeFilter === "trash" ? (
-                      <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 shrink-0 items-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
-                        Restaurar
-                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button type="button" onClick={() => void handleRestoreProject(project)} className="inline-flex h-9 items-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">Restaurar</button>
+                        <button type="button" onClick={() => setProjectToDelete(project)} className="grid size-9 place-items-center rounded-xl border border-danger/30 bg-danger/10 text-danger" aria-label="Excluir definitivamente"><Trash2 className="size-3.5" /></button>
+                      </div>
                     ) : activeFilter === "archived" && project.myRole === "owner" ? (
                       <button type="button" onClick={() => void handleRestoreArchivedProject(project)} className="inline-flex h-9 shrink-0 items-center rounded-xl border border-success/30 bg-success/10 px-3 text-xs font-semibold text-success">
                         Restaurar
@@ -617,6 +636,7 @@ export default function ProjectsPage() {
           {notice}
         </div>
       )}
+      <ProjectConfirmationDialog open={Boolean(projectToDelete)} title="Excluir projeto definitivamente?" description={<>O projeto <strong className="text-foreground">{projectToDelete?.name}</strong> e seus dados serão apagados sem possibilidade de recuperação.</>} icon={<Trash2 className="size-5" />} variant="danger" confirmLabel="Excluir definitivamente" pendingLabel="Excluindo..." pending={deletingProject} onClose={() => setProjectToDelete(null)} onConfirm={() => void handlePermanentDelete()} />
     </AppShell>
   );
 }

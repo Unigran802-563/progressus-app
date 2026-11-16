@@ -257,6 +257,7 @@ export default function ChatPage({ params }: ChatPageProps) {
               isLoading={isMessagesLoading}
               onEditMessage={editMessage}
               onDeleteMessage={removeMessage}
+                  onDeleteMessageForMe={(messageId) => removeMessage(messageId, 'me')}
             />
 
             {messageError && (

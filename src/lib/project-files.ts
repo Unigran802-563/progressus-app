@@ -11,6 +11,8 @@ export type ProjectFile = {
   createdAt: string;
 };
 
+export type TaskFile = ProjectFile & { taskId: string };
+
 type FileRow = {
   id_arquivo: string;
   nome: string;
@@ -20,6 +22,7 @@ type FileRow = {
   id_projeto: string | null;
   id_mensagem: string | null;
   created_at?: string | null;
+  id_tarefa?: string | null;
 };
 
 function mapFile(row: FileRow, source: ProjectFile['source']): ProjectFile {
@@ -107,4 +110,29 @@ export async function deleteProjectFile(file: ProjectFile): Promise<void> {
 
   const { error: rowError } = await supabase.from('arquivo').delete().eq('id_arquivo', file.id);
   if (rowError) throw new Error(rowError.message);
+}
+
+
+export async function listTaskFiles(taskId: string): Promise<TaskFile[]> {
+  const { data, error } = await supabase
+    .from('arquivo')
+    .select('id_arquivo, nome, tipo, tamanho, caminho, id_projeto, id_mensagem, id_tarefa, created_at')
+    .eq('id_tarefa', taskId)
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as FileRow[]).map((row) => ({ ...mapFile(row, 'project'), taskId }));
+}
+
+export async function uploadTaskFile(projectId: string, taskId: string, file: File): Promise<TaskFile> {
+  const safeName = `${crypto.randomUUID()}${file.name.includes('.') ? `.${file.name.split('.').pop()}` : ''}`;
+  const path = `projetos/${projectId}/tarefas/${taskId}/${safeName}`;
+  const { error: uploadError } = await supabase.storage.from('arquivos').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (uploadError) throw new Error(uploadError.message);
+  const { data, error } = await supabase.from('arquivo').insert({ nome: file.name, tipo: file.type || null, tamanho: file.size, id_projeto: projectId, id_tarefa: taskId, caminho: path }).select('id_arquivo, nome, tipo, tamanho, caminho, id_projeto, id_mensagem, id_tarefa, created_at').single();
+  if (error) { await supabase.storage.from('arquivos').remove([path]); throw new Error(error.message); }
+  return { ...mapFile(data as FileRow, 'project'), taskId };
+}
+
+export async function deleteTaskFile(file: TaskFile): Promise<void> {
+  await deleteProjectFile(file);
 }
