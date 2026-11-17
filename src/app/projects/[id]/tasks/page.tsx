@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTasksPanel from '@/components/projects/ProjectTasksPanel';
 import AppShell from '@/components/layout/AppShell';
-import { useProjectAccessSync } from '@/hooks/useProjectAccessSync';
 import { getProject, getProjectMember } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 import type { AccessibleProject, Project, ProjectRole } from '@/types';
@@ -22,9 +21,6 @@ export default function TasksPage({ params }: TasksPageProps) {
   const [userName, setUserName] = useState('Usuário');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // A rota alternativa mantém a mesma sincronização de acesso do AppShell.
-  useProjectAccessSync();
 
   useEffect(() => {
     let active = true;
@@ -148,10 +144,10 @@ export default function TasksPage({ params }: TasksPageProps) {
           </div>
         ) : (
           <>
-            {project.archivedAt && <p className="mb-4 text-sm text-zinc-400">Projeto arquivado. As tarefas estão disponíveis somente para leitura.</p>}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
-              <ProjectTasksPanel projectId={project.id} disabled={Boolean(project.archivedAt) || projectRole === 'viewer' || !projectRole} />
-            </div>
+            {(project.archivedAt || project.deletedAt) && <p className="mb-4 text-sm text-zinc-400">Projeto inativo. As tarefas estão ocultas até que ele seja restaurado.</p>}
+            {!project.archivedAt && !project.deletedAt && <div className="rounded-2xl border border-white/10 bg-white/[0.03]">
+              <ProjectTasksPanel projectId={project.id} disabled={projectRole === 'viewer' || !projectRole} />
+            </div>}
           </>
         )}
       </div>

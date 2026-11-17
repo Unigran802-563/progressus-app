@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) return NextResponse.json({ error: 'Sessão inválida ou expirada.' }, { status: 401 });
     const [{ data: projects, error: projectsError }, { data: tasks, error: tasksError }] = await Promise.all([
-      supabase.from('projeto').select('id_projeto, nome, descricao, created_at, arquivado_em').order('created_at', { ascending: false }).limit(100),
-      supabase.from('tarefa').select('id_tarefa, id_projeto, id_status, id_usuario, nome, descricao, prioridade, prazo, created_at, projeto:id_projeto(nome), status:id_status(nome)').order('prazo', { ascending: true, nullsFirst: false }).limit(300),
+      supabase.from('projeto').select('id_projeto, nome, descricao, created_at, arquivado_em').is('arquivado_em', null).is('excluido_em', null).order('created_at', { ascending: false }).limit(100),
+      supabase.from('tarefa').select('id_tarefa, id_projeto, id_status, id_usuario, nome, descricao, prioridade, prazo, created_at, projeto:id_projeto!inner(nome, arquivado_em, excluido_em), status:id_status(nome)').is('projeto.arquivado_em', null).is('projeto.excluido_em', null).order('prazo', { ascending: true, nullsFirst: false }).limit(300),
     ]);
     if (projectsError) throw new Error(projectsError.message);
     if (tasksError) throw new Error(tasksError.message);

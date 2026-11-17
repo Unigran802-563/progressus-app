@@ -23,7 +23,9 @@ export async function searchGlobal(value: string): Promise<GlobalSearchResult[]>
     listAccessibleProjects(),
     supabase
       .from('tarefa')
-      .select('id_tarefa, id_projeto, nome, descricao, prazo, projeto:id_projeto(nome)')
+      .select('id_tarefa, id_projeto, nome, descricao, prazo, projeto:id_projeto!inner(nome, arquivado_em, excluido_em)')
+      .is('projeto.arquivado_em', null)
+      .is('projeto.excluido_em', null)
       .or(`nome.ilike.${pattern},descricao.ilike.${pattern}`)
       .order('created_at', { ascending: false })
       .limit(8),

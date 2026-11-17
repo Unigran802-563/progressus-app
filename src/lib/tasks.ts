@@ -66,7 +66,9 @@ export function notifyTasksChanged() {
 export async function obterMetricasTarefas(): Promise<TaskMetrics> {
   const { data, error } = await supabase
     .from('tarefa')
-    .select('id_status, prazo, status:id_status (nome)');
+    .select('id_status, prazo, status:id_status (nome), projeto:id_projeto!inner(arquivado_em, excluido_em)')
+    .is('projeto.arquivado_em', null)
+    .is('projeto.excluido_em', null);
   throwIfError(error);
 
   const hoje = new Date();
@@ -126,7 +128,9 @@ export async function listarOuCriarStatus(idProjeto: string): Promise<TarefaStat
 export async function listarTarefas(idProjeto: string): Promise<Tarefa[]> {
   const { data, error } = await supabase
     .from('tarefa')
-    .select(tarefaSelect)
+    .select(`${tarefaSelect}, projeto:id_projeto!inner(arquivado_em, excluido_em)`)
+    .is('projeto.arquivado_em', null)
+    .is('projeto.excluido_em', null)
     .eq('id_projeto', idProjeto)
     .order('created_at', { ascending: false });
   throwIfError(error);
@@ -138,8 +142,10 @@ export async function listarMinhasTarefas(userId: string, options: { includeCrea
     .from('tarefa')
     .select(`
       id_tarefa, id_projeto, id_status, id_usuario, id_criador, nome, descricao, prioridade, prazo, created_at,
-      projeto:id_projeto (nome), status:id_status (nome)
-    `);
+      projeto:id_projeto!inner (nome, arquivado_em, excluido_em), status:id_status (nome)
+    `)
+    .is('projeto.arquivado_em', null)
+    .is('projeto.excluido_em', null);
   const scopedQuery = options.includeCreated
     ? query.or(`id_usuario.eq.${userId},id_criador.eq.${userId}`)
     : query.eq('id_usuario', userId);
@@ -162,7 +168,9 @@ export async function listarMinhasTarefas(userId: string, options: { includeCrea
 export async function buscarTarefa(idTarefa: string): Promise<Tarefa | null> {
   const { data, error } = await supabase
     .from('tarefa')
-    .select(tarefaSelect)
+    .select(`${tarefaSelect}, projeto:id_projeto!inner(arquivado_em, excluido_em)`)
+    .is('projeto.arquivado_em', null)
+    .is('projeto.excluido_em', null)
     .eq('id_tarefa', idTarefa)
     .maybeSingle();
   throwIfError(error);

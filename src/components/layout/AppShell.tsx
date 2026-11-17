@@ -118,6 +118,7 @@ export default function AppShell({
   const [globalProjects, setGlobalProjects] = useState<AccessibleProject[]>([]);
   const [globalProjectsLoading, setGlobalProjectsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchRevision, setSearchRevision] = useState(0);
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -193,7 +194,11 @@ export default function AppShell({
   useEffect(() => {
     const refreshProjects = (event: Event) => {
       const projects = (event as CustomEvent<{ projects: AccessibleProject[] }>).detail?.projects;
-      if (projects) setGlobalProjects(projects);
+      if (projects) {
+        setGlobalProjects(projects.filter((p) => !p.archivedAt && !p.deletedAt));
+        setSearchResults([]);
+        setSearchRevision((revision) => revision + 1);
+      }
     };
     window.addEventListener("progressus:project-access-checked", refreshProjects);
     return () => window.removeEventListener("progressus:project-access-checked", refreshProjects);
@@ -249,7 +254,7 @@ export default function AppShell({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [searchTerm]);
+  }, [searchTerm, searchRevision]);
 
   function handleSearchResult(result: GlobalSearchResult) {
     setSearchTerm("");

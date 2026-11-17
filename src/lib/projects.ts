@@ -132,7 +132,7 @@ export async function listProjects(
 export async function getProject(projectId: string): Promise<Project | null> {
   const { data, error } = await supabase
     .from('projeto')
-    .select('id_projeto, nome, descricao, created_at, arquivado_em')
+    .select('id_projeto, nome, descricao, created_at, arquivado_em, excluido_em')
     .eq('id_projeto', projectId)
     .maybeSingle();
 
@@ -238,7 +238,7 @@ export async function updateProject(
     .from('projeto')
     .update(updateData)
     .eq('id_projeto', projectId)
-    .select('id_projeto, nome, descricao, created_at, arquivado_em')
+    .select('id_projeto, nome, descricao, created_at, arquivado_em, excluido_em')
     .single();
 
   if (error) {
@@ -246,6 +246,13 @@ export async function updateProject(
   }
 
   return mapProject(data as ProjectRow);
+}
+
+// O estado das tarefas é herdado do projeto; nunca regravar tarefas neste fluxo.
+function notifyProjectLifecycleChanged(project: Project) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('progressus:projects-changed', { detail: { project } }));
+  window.dispatchEvent(new Event('progressus:tasks-changed'));
 }
 
 export async function archiveProject(projectId: string): Promise<Project> {
@@ -257,7 +264,9 @@ export async function archiveProject(projectId: string): Promise<Project> {
     throw new Error(error.message);
   }
 
-  return mapProject(data as ProjectRow);
+  const project = mapProject(data as ProjectRow);
+  notifyProjectLifecycleChanged(project);
+  return project;
 }
 
 export async function restoreArchivedProject(projectId: string): Promise<Project> {
@@ -269,7 +278,9 @@ export async function restoreArchivedProject(projectId: string): Promise<Project
     throw new Error(error.message);
   }
 
-  return mapProject(data as ProjectRow);
+  const project = mapProject(data as ProjectRow);
+  notifyProjectLifecycleChanged(project);
+  return project;
 }
 
 export async function moveProjectToTrash(projectId: string): Promise<Project> {
@@ -281,7 +292,9 @@ export async function moveProjectToTrash(projectId: string): Promise<Project> {
     throw new Error(error.message);
   }
 
-  return mapProject(data as ProjectRow);
+  const project = mapProject(data as ProjectRow);
+  notifyProjectLifecycleChanged(project);
+  return project;
 }
 
 export async function restoreProjectFromTrash(projectId: string): Promise<Project> {
@@ -293,7 +306,9 @@ export async function restoreProjectFromTrash(projectId: string): Promise<Projec
     throw new Error(error.message);
   }
 
-  return mapProject(data as ProjectRow);
+  const project = mapProject(data as ProjectRow);
+  notifyProjectLifecycleChanged(project);
+  return project;
 }
 
 export async function createProjectInvite(

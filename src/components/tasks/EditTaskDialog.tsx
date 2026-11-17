@@ -68,8 +68,8 @@ async function readTaskContext(taskId: string, userId: string): Promise<TaskCont
     listAccessibleProjects(),
   ]);
   if (!project) throw new TaskAccessError('O projeto não está mais disponível ou você perdeu o acesso.');
-  if (project.archivedAt) throw new TaskAccessError('Este projeto está arquivado. Restaure o projeto antes de editar tarefas.');
-  // getProject não expõe excluido_em; a listagem padrão exclui arquivos e lixeira.
+  if (project.archivedAt || project.deletedAt) throw new TaskAccessError('Este projeto está arquivado. Restaure o projeto antes de editar tarefas.');
+  // A listagem padrão confirma que o projeto continua ativo e acessível.
   if (!activeProjects.some((item) => item.id === project.id && !item.archivedAt)) {
     throw new TaskAccessError('Este projeto não está ativo ou você perdeu o acesso. Projetos na lixeira não permitem editar tarefas.');
   }
@@ -106,6 +106,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [fileBusy, setFileBusy] = useState(false);
+  const fileBusyRef = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
   const [accessWarning, setAccessWarning] = useState('');
@@ -152,7 +154,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
     }
 
     async function load() {
-      if (!active || !open || !taskId || saveRef.current) return;
+      if (!active || !open || !taskId || saveRef.current || fileBusyRef.current) return;
       const currentRequest = ++request;
       if (initialized) setChecking(true); else setLoading(true);
       setError('');
@@ -224,7 +226,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
 
   const currentContext = context?.task.id_tarefa === taskId && context.userId === userId ? context : null;
   const editable = Boolean(open && currentContext && !loading && !accessWarning);
-  const busy = loading || checking || saving || deleting;
+  const busy = loading || checking || saving || deleting || fileBusy;
+  function onFilesBusyChanged(value: boolean) { fileBusyRef.current = value; setFileBusy(value); }
 
   useProjectParticipantsRefresh(currentContext?.project.id ?? '', open && Boolean(currentContext), () => {
     // O evento é um sinal de refresh, não uma autorização; reconsultar tarefa, sessão e papel.
@@ -232,7 +235,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
   }, () => revokeRef.current());
 
   function closeDialog() {
-    if (!saveRef.current) callbacksRef.current.onClose();
+    if (!saveRef.current && !fileBusyRef.current) callbacksRef.current.onClose();
   }
 
   useEffect(() => {
@@ -249,10 +252,12 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       if (saveRef.current) dialogRef.current?.focus(); else cancelRef.current?.focus();
     }
     function handleKeyDown(event: KeyboardEvent) {
+      const nested = event.target instanceof Element ? event.target.closest('[role="dialog"]') : null;
+      if (nested && nested !== dialogRef.current) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        if (!saveRef.current) callbacksRef.current.onClose();
+        if (!saveRef.current && !fileBusyRef.current) callbacksRef.current.onClose();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -274,6 +279,8 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       }
     }
     function handleFocusIn(event: FocusEvent) {
+      const nested = event.target instanceof Element ? event.target.closest('[role="dialog"]') : null;
+      if (nested && nested !== dialogRef.current) return;
       if (event.target instanceof Node && !dialogRef.current?.contains(event.target)) focusInside();
     }
     document.addEventListener('keydown', handleKeyDown, true);
@@ -293,9 +300,10 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
 
   useEffect(() => {
     if (!open) return;
+    if (fileBusy) return;
     if (busy || !editable) dialogRef.current?.focus();
     else nameRef.current?.focus();
-  }, [open, taskId, busy, editable]);
+  }, [open, taskId, busy, fileBusy, editable]);
 
   const originalResponsibleId = currentContext?.task.id_usuario ?? '';
   const historicalResponsible = Boolean(originalResponsibleId && currentContext
@@ -352,7 +360,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
       if (description !== (original.descricao ?? '')) payload.descricao = description;
       if (statusId !== original.id_status) payload.id_status = statusId;
       if (priority !== (original.prioridade ?? '')) payload.prioridade = priority as TarefaPrioridade;
-      if (dueDate !== (original.prazo ?? '')) payload.prazo = localDateTimeToIso(dueDate);
+      if (dueDate !== toLocalDateTimeInput(original.prazo ?? '')) payload.prazo = localDateTimeToIso(dueDate);
       if (responsibleChanged) payload.id_usuario = responsibleId || null;
       if (Object.keys(payload).length === 0) {
         if (isCurrent()) { callbacksRef.current.onSaved?.(fresh.task); callbacksRef.current.onClose(); }
@@ -417,7 +425,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-4" role="presentation">
-      <button type="button" aria-label="Fechar edição da tarefa" aria-hidden="true" tabIndex={-1} disabled={saving} className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm" onClick={closeDialog} />
+      <button type="button" aria-label="Fechar edição da tarefa" aria-hidden="true" tabIndex={-1} disabled={saving || deleting || fileBusy} className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm" onClick={closeDialog} />
       <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-busy={busy} aria-labelledby={`${id}-title`} aria-describedby={`${id}-description${error ? ` ${id}-error` : ''}${accessWarning ? ` ${id}-warning` : ''}`} className="relative z-10 my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface shadow-2xl shadow-black/50 outline-none sm:max-h-[calc(100dvh-2rem)]">
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -427,19 +435,13 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
               <p id={`${id}-description`} className="mt-0.5 break-words text-sm text-muted-foreground">Atualize os dados da tarefa. O projeto permanece o mesmo.</p>
             </div>
           </div>
-          <button type="button" onClick={closeDialog} disabled={saving} className={`grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`} aria-label="Fechar"><X className="size-5" aria-hidden="true" /></button>
+          <button type="button" onClick={closeDialog} disabled={saving || deleting || fileBusy} className={`grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`} aria-label="Fechar"><X className="size-5" aria-hidden="true" /></button>
         </div>
 
         <div className="px-5 py-5 sm:px-6 sm:py-6">
           {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Carregando tarefa e verificando acesso...</p>}
           {accessWarning && <p id={`${id}-warning`} className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning" role="alert"><ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{accessWarning}</p>}
-          {accessWarning && currentContext && (
-            <dl className="mt-4 space-y-3 rounded-xl border border-border bg-background p-4 text-sm" aria-label="Últimos dados carregados, somente leitura">
-              <div><dt className="text-muted-foreground">Projeto</dt><dd className="mt-1 break-words text-foreground">{currentContext.project.name}</dd></div>
-              <div><dt className="text-muted-foreground">Tarefa</dt><dd className="mt-1 break-words text-foreground">{currentContext.task.nome}</dd></div>
-              {currentContext.task.descricao && <div><dt className="text-muted-foreground">Descrição</dt><dd className="mt-1 whitespace-pre-wrap break-words text-foreground">{currentContext.task.descricao}</dd></div>}
-            </dl>
-          )}
+
 
           {editable && currentContext && (
             <form id={`${id}-form`} noValidate onSubmit={handleSubmit}>
@@ -455,7 +457,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
                 <div className="space-y-2"><label htmlFor={`${id}-responsible`} className="text-sm font-medium text-foreground">Responsável</label><select id={`${id}-responsible`} value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)} aria-invalid={unavailableSelection || undefined} className={inputClass}><option value="">Sem responsável</option>{historicalResponsible && <option value={originalResponsibleId} disabled={responsibleId !== originalResponsibleId}>Usuário excluído (responsável anterior)</option>}{unavailableSelection && <option value={responsibleId} disabled>Participante indisponível</option>}{currentContext.participants.map((participant) => <option key={participant.userId} value={participant.userId}>{participant.name}{participant.userId === userId ? ' (você)' : ''}</option>)}</select>{historicalResponsible && <p className="text-sm text-muted-foreground">O responsável anterior será preservado se você não alterar este campo.</p>}</div>
                 <div className="space-y-2"><label htmlFor={`${id}-due-date`} className="text-sm font-medium text-foreground">Prazo e horário <span className="text-muted-foreground">(opcional)</span></label><input id={`${id}-due-date`} type="datetime-local" value={dueDate} onChange={(event) => setDueDate(event.target.value)} aria-invalid={!dateValid || undefined} aria-describedby={!dateValid ? `${id}-date-error` : undefined} className={inputClass} />{!dateValid && <p id={`${id}-date-error`} className="text-sm text-danger">Informe um prazo válido, com data e horário.</p>}</div>
               </fieldset>
-              {currentContext && <TaskFilesPanel taskId={currentContext.task.id_tarefa} projectId={currentContext.task.id_projeto} disabled={busy} />}
+              {currentContext && <TaskFilesPanel taskId={currentContext.task.id_tarefa} projectId={currentContext.task.id_projeto} disabled={loading || checking || saving || deleting} onBusyChange={onFilesBusyChanged} />}
             </form>
           )}
 
@@ -465,7 +467,7 @@ export default function EditTaskDialog({ open, task, userId, onClose, onSaved, o
             {editable && !confirmDelete && <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}><Trash2 className="size-4" aria-hidden="true" />Excluir tarefa</button>}
             {!editable && <span />}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button ref={cancelRef} type="button" onClick={closeDialog} disabled={saving} className={`h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>Cancelar</button>
+            <button ref={cancelRef} type="button" onClick={closeDialog} disabled={saving || deleting || fileBusy} className={`h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusClass}`}>Cancelar</button>
             {!editable && !busy && taskId && <button type="button" onClick={() => refreshRef.current()} className={`h-10 rounded-xl border border-border px-4 text-sm font-medium text-foreground hover:bg-muted ${focusClass}`}>Verificar novamente</button>}
             {editable && !confirmDelete && <button type="submit" form={`${id}-form`} disabled={!canSubmit} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 ${focusClass}`}>{saving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{saving ? 'Salvando...' : 'Salvar alterações'}</button>}
             </div>

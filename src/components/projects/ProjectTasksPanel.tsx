@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useProjectParticipantsRefresh } from "@/hooks/useProjectParticipantsRefresh";
 import EditTaskDialog from "@/components/tasks/EditTaskDialog";
+import TaskDetailsDialog from "@/components/tasks/TaskDetailsDialog";
 
 import {
   alterarStatusTarefa,
@@ -26,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 import { getProject, listProjectParticipants } from "@/lib/projects";
 import { canEditTask } from "@/lib/task-permissions";
 import { getTaskResponsibleName } from "@/lib/task-responsibles";
-import type { ProjectParticipant, ProjectRole, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
+import type { Project, ProjectParticipant, ProjectRole, Tarefa, TarefaPrioridade, TarefaStatus } from "@/types";
 
 function localDateTimeToIso(value: string) {
   return value ? new Date(value).toISOString() : null;
@@ -64,7 +65,9 @@ export default function ProjectTasksPanel({
   const [participants, setParticipants] = useState<ProjectParticipant[]>([]);
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null);
   const [projectArchived, setProjectArchived] = useState(true);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [editingTask, setEditingTask] = useState<Tarefa | null>(null);
+  const [detailsTask, setDetailsTask] = useState<Tarefa | null>(null);
   const [responsibleId, setResponsibleId] = useState("");
   const [prazo, setPrazo] = useState("");
 
@@ -77,6 +80,7 @@ export default function ProjectTasksPanel({
   const projectReadOnly = disabled || projectArchived || (projectRole !== "owner" && projectRole !== "member");
   const taskEditable = (task: Tarefa) => !projectReadOnly && canEditTask(task, currentUserId ?? "", projectRole);
   const closeEditTask = useCallback(() => setEditingTask(null), []);
+  const closeDetailsTask = useCallback(() => setDetailsTask(null), []);
   const handleTaskSaved = useCallback((updated: Tarefa) => {
     setTarefas((current) => current.map((task) => task.id_tarefa === updated.id_tarefa ? { ...task, ...updated } : task));
     setEditingTask(null);
@@ -125,7 +129,9 @@ export default function ProjectTasksPanel({
         setTarefas(tarefasData);
         // Derivar o papel antes de excluir visualizadores dos responsáveis elegíveis.
         setProjectRole(currentRole);
-        setProjectArchived(Boolean(projectData.archivedAt));
+        setProjectArchived(Boolean(projectData.archivedAt || projectData.deletedAt));
+        setCurrentProject(projectData);
+        if (projectData.archivedAt || projectData.deletedAt) { setDetailsTask(null); setEditingTask(null); }
         const eligibleParticipants = participantsData.filter((participant) => participant.role !== "viewer");
         setParticipants(eligibleParticipants);
         setResponsibleId((current) => {
@@ -162,7 +168,8 @@ export default function ProjectTasksPanel({
       if (projects) {
         const project = projects.find((item) => item.id === projectId);
         setProjectRole(project?.myRole ?? null);
-        setProjectArchived(!project || Boolean(project.archivedAt));
+        setProjectArchived(!project || Boolean(project.archivedAt || project.deletedAt));
+        if (!project || project.archivedAt || project.deletedAt) { setTarefas([]); setDetailsTask(null); setEditingTask(null); }
         if (!project) {
           setTarefas([]);
           setStatus([]);
@@ -520,9 +527,9 @@ export default function ProjectTasksPanel({
                     className="rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <h4 className="text-sm font-semibold leading-5 text-foreground">
+                      <button type="button" onClick={() => setDetailsTask(tarefa)} className="text-left text-sm font-semibold leading-5 text-foreground hover:text-primary">
                         {tarefa.nome}
-                      </h4>
+                      </button>
 
                       <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">
                         {tarefa.prioridade || "Media"}
@@ -628,9 +635,9 @@ export default function ProjectTasksPanel({
                     className="transition-colors hover:bg-muted/20"
                   >
                     <td className="px-4 py-4">
-                      <p className="text-sm font-medium text-foreground">
+                      <button type="button" onClick={() => setDetailsTask(tarefa)} className="text-left text-sm font-medium text-foreground hover:text-primary">
                         {tarefa.nome}
-                      </p>
+                      </button>
 
                       {tarefa.descricao && (
                         <p className="mt-1 max-w-md truncate text-xs text-muted-foreground">
@@ -690,6 +697,7 @@ export default function ProjectTasksPanel({
         </div>
       )}
 
+      <TaskDetailsDialog open={Boolean(detailsTask)} task={detailsTask} project={currentProject} statusName={detailsTask ? getStatusName(detailsTask.id_status) : undefined} responsibleName={detailsTask ? getTaskResponsibleName(detailsTask) : undefined} onClose={closeDetailsTask} onEdit={detailsTask && taskEditable(detailsTask) ? () => { setEditingTask(detailsTask); setDetailsTask(null); } : undefined} />
       <EditTaskDialog open={Boolean(editingTask)} task={editingTask} userId={currentUserId ?? ""} onClose={closeEditTask} onSaved={handleTaskSaved} onDeleted={handleTaskDeleted} />
 
       {isSuggestionModalOpen && (

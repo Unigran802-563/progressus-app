@@ -5,8 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { listAccessibleProjects } from '@/lib/projects';
 import { supabase } from '@/lib/supabase';
 
-// As permissões são revogadas imediatamente pelo banco. Esta sincronização
-// também remove os dados já carregados na interface, sem exigir F5.
+// RLS protege as próximas consultas. Estes eventos também retiram dados já
+// carregados da interface; o intervalo existente é fallback para falhas Realtime.
 export function useProjectAccessSync() {
   const pathname = usePathname();
   const router = useRouter();
@@ -14,9 +14,12 @@ export function useProjectAccessSync() {
   useEffect(() => {
     let active = true;
     let refreshing = false;
+    let pendingRefresh = false;
+    let signature = '';
 
     async function refreshAccess() {
-      if (refreshing || document.visibilityState === 'hidden') return;
+      if (!active || document.visibilityState === 'hidden') return;
+      if (refreshing) { pendingRefresh = true; return; }
       refreshing = true;
       try {
         const { data } = await supabase.auth.getSession();
@@ -24,6 +27,10 @@ export function useProjectAccessSync() {
         const projects = await listAccessibleProjects({ includeArchived: true });
         if (!active) return;
         const accessibleIds = new Set(projects.map((project) => project.id));
+        const activeProjects = projects.filter((project) => !project.archivedAt && !project.deletedAt);
+        const nextSignature = JSON.stringify(projects.map((p) => [p.id, p.archivedAt, p.deletedAt, p.myRole]).sort());
+        const changed = signature !== nextSignature;
+        signature = nextSignature;
         try {
           const key = `progressus:chat-notifications:${data.session.user.id}`;
           const saved = window.localStorage.getItem(key);
@@ -45,20 +52,23 @@ export function useProjectAccessSync() {
               window.dispatchEvent(new Event('progressus:notifications-changed'));
             }
           }
-        } catch { /* Cache inválido não pode impedir a verificação de acesso. */ }
+        } catch { /* Cache inválido não impede a verificação de acesso. */ }
         const projectRoute = pathname.match(/^\/projects\/([^/]+)/)?.[1];
         const projectChatRoute = pathname.match(/^\/chat\/([^/]+)/)?.[1];
         const queryProjectId = pathname === '/chat' ? new URLSearchParams(window.location.search).get('projectId') : null;
         const selectedProject = projectRoute || projectChatRoute || queryProjectId;
 
-        window.dispatchEvent(new CustomEvent('progressus:project-access-checked', { detail: { projects } }));
-        if (selectedProject && !accessibleIds.has(selectedProject)) {
+        window.dispatchEvent(new CustomEvent('progressus:project-access-checked', { detail: { projects, activeProjects } }));
+        if (changed) window.dispatchEvent(new Event('progressus:tasks-changed'));
+        // Preservar a confirmação visual após a exclusão feita nesta mesma tela.
+        if (selectedProject && !accessibleIds.has(selectedProject) && !document.getElementById('project-success-title')) {
           router.replace(pathname.startsWith('/chat') ? '/chat' : '/projects');
         }
       } catch {
-        // Falha transitória de rede não deve ser interpretada como perda de acesso.
+        // Falha transitória não deve ser interpretada como perda de acesso.
       } finally {
         refreshing = false;
+        if (pendingRefresh && active) { pendingRefresh = false; void refreshAccess(); }
       }
     }
 
@@ -66,15 +76,22 @@ export function useProjectAccessSync() {
       if (document.visibilityState === 'visible') void refreshAccess();
     }
     const refresh = () => { void refreshAccess(); };
+    const channel = supabase.channel(`progressus-project-lifecycle-${pathname}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projeto' }, refresh)
+      .subscribe();
     const timer = window.setInterval(refresh, 20000);
+    void refreshAccess();
     window.addEventListener('focus', refresh);
     window.addEventListener('progressus:project-members-changed', refresh);
+    window.addEventListener('progressus:projects-changed', refresh);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       active = false;
       window.clearInterval(timer);
+      void supabase.removeChannel(channel);
       window.removeEventListener('focus', refresh);
       window.removeEventListener('progressus:project-members-changed', refresh);
+      window.removeEventListener('progressus:projects-changed', refresh);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [pathname, router]);

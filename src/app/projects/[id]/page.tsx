@@ -126,7 +126,7 @@ export default function ProjectDetailPage() {
         if (tasksResult.error) throw new Error(tasksResult.error.message);
         if (statusesResult.error) throw new Error(statusesResult.error.message);
 
-        if (!projectData) {
+        if (!projectData || projectData.deletedAt) {
           setProject(null);
           setPageError("Este projeto não existe ou você não tem acesso a ele.");
           return;
@@ -569,13 +569,9 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
-              {activeTab === "tasks" && (
-                <ProjectTasksPanel
-                  projectId={project.id}
-                  disabled={Boolean(project.archivedAt)}
-                  listOnly
-                />
-              )}
+              {activeTab === "tasks" && (project.archivedAt
+                ? <p className="rounded-xl border border-border bg-background p-4 text-sm text-muted-foreground">As tarefas estão ocultas enquanto o projeto estiver arquivado. Restaure o projeto para visualizá-las novamente.</p>
+                : <ProjectTasksPanel projectId={project.id} listOnly />)}
 
               {activeTab === "members" && (
                 <Panel title={`Participantes (${participants.length})`} bodyClassName="p-0">

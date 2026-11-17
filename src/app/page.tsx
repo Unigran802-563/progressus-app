@@ -185,12 +185,16 @@ export default function HomePage() {
     function refreshAccess(event: Event) {
       const accessible = (event as CustomEvent<{ projects: Project[] }>).detail?.projects;
       if (!accessible) return;
-      setProjects(accessible.filter((project) => !project.archivedAt));
+      const activeProjects = accessible.filter((project) => !project.archivedAt && !project.deletedAt);
+      const activeIds = new Set(activeProjects.map((p) => p.id));
+      setProjects(activeProjects);
+      setDashboardTasks((current) => current.filter((task) => activeIds.has(task.id_projeto)));
       void loadTaskMetrics(false);
+      void loadProjects();
     }
     window.addEventListener("progressus:project-access-checked", refreshAccess);
     return () => window.removeEventListener("progressus:project-access-checked", refreshAccess);
-  }, [loadTaskMetrics]);
+  }, [loadProjects, loadTaskMetrics]);
 
   const userName = useMemo(() => {
     const metadataName = user?.user_metadata?.nome || user?.user_metadata?.name;
