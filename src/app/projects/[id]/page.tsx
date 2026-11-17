@@ -41,7 +41,6 @@ import {
   updateProject,
 } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
-import { emitSuccess } from "@/lib/feedback";
 import type {
   CreateProjectData,
   Project,
@@ -103,6 +102,7 @@ export default function ProjectDetailPage() {
   const [confirmationError, setConfirmationError] = useState("");
   const confirmationPendingRef = useRef(false);
   const [notice, setNotice] = useState("");
+  const [successModal, setSuccessModal] = useState<"archive" | "trash" | null>(null);
 
   const loadProject = useCallback(
     async (currentUserId: string) => {
@@ -253,9 +253,8 @@ export default function ProjectDetailPage() {
     setConfirmationError("");
     try {
       await archiveProject(project.id);
-      emitSuccess("Projeto arquivado com sucesso.");
       setConfirmation(null);
-      router.replace("/projects");
+      setSuccessModal("archive");
     } catch (error) {
       setConfirmationError(
         error instanceof Error
@@ -276,9 +275,8 @@ export default function ProjectDetailPage() {
     setConfirmationError("");
     try {
       await moveProjectToTrash(project.id);
-      emitSuccess("Projeto excluído com sucesso e movido para a lixeira.");
       setConfirmation(null);
-      router.replace("/projects");
+      setSuccessModal("trash");
     } catch (error) {
       setConfirmationError(error instanceof Error ? error.message : "Não foi possível mover o projeto para a lixeira.");
     } finally {
@@ -733,6 +731,26 @@ export default function ProjectDetailPage() {
           role="status"
         >
           {notice}
+        </div>
+      )}
+      {successModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="presentation">
+          <section className="w-full max-w-md rounded-2xl border border-success/30 bg-surface p-6 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="project-success-title">
+            <div className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success">
+              <CheckCircle2 className="size-8" aria-hidden="true" />
+            </div>
+            <h2 id="project-success-title" className="mt-4 text-xl font-semibold text-foreground">
+              {successModal === "archive" ? "Projeto arquivado" : "Projeto excluído"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {successModal === "archive"
+                ? "O projeto foi arquivado com sucesso e pode ser restaurado na aba Arquivados."
+                : "O projeto foi movido para a lixeira com sucesso e poderá ser restaurado durante o período de retenção."}
+            </p>
+            <button type="button" onClick={() => router.replace("/projects")} className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90">
+              Ir para projetos
+            </button>
+          </section>
         </div>
       )}
     </AppShell>
