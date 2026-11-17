@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { Check, Ellipsis, Pencil, Trash2, X } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -88,6 +89,9 @@ export function ChatMessage({
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'all' | 'me'>('all');
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     async function loadFileUrls() {
@@ -117,6 +121,55 @@ export function ChatMessage({
 
     loadFileUrls();
   }, [message.arquivos]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function positionMenu() {
+      const button = menuButtonRef.current;
+      const menu = menuRef.current;
+      if (!button || !menu) return;
+      const buttonRect = button.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const gap = 8;
+      const viewportTop = window.visualViewport?.offsetTop ?? 0;
+      const viewportBottom = viewportTop + (window.visualViewport?.height ?? window.innerHeight);
+      const canOpenAbove = buttonRect.top - viewportTop >= menuRect.height + gap;
+      const top = canOpenAbove
+        ? buttonRect.top - menuRect.height - gap
+        : Math.min(buttonRect.bottom + gap, viewportBottom - menuRect.height - gap);
+      const left = Math.max(gap, Math.min(buttonRect.right - menuRect.width, window.innerWidth - menuRect.width - gap));
+      setMenuPosition({ top: Math.max(viewportTop + gap, top), left });
+    }
+
+    const closeOnOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !menuRef.current?.contains(target) && !menuButtonRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMenuOpen(false); menuButtonRef.current?.focus(); }
+    };
+    positionMenu();
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('touchstart', closeOnOutside);
+    window.visualViewport?.addEventListener('resize', positionMenu);
+    window.visualViewport?.addEventListener('scroll', positionMenu);
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('touchstart', closeOnOutside);
+      window.visualViewport?.removeEventListener('resize', positionMenu);
+      window.visualViewport?.removeEventListener('scroll', positionMenu);
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
+    };
+  }, [menuOpen]);
 
   async function saveEdit() {
     if (!onEdit || !draft.trim()) return;
@@ -245,12 +298,12 @@ export function ChatMessage({
 
         {isOwn && (onEdit || onDelete) && !editing && (
           <div className="absolute right-2 top-2 z-10">
-            <button type="button" onClick={() => setMenuOpen((current) => !current)} aria-label="Ações da mensagem" className="grid size-8 place-items-center rounded-lg text-current/60 transition hover:bg-black/10 hover:text-current"><Ellipsis className="size-4" /></button>
-            {menuOpen && <div className="absolute right-0 top-9 z-20 min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl">
+            <button ref={menuButtonRef} type="button" onClick={() => { setMenuPosition(null); setMenuOpen((current) => !current); }} aria-label="Ações da mensagem" className="grid size-8 place-items-center rounded-lg text-current/60 transition hover:bg-black/10 hover:text-current"><Ellipsis className="size-4" /></button>
+            {menuOpen && typeof document !== 'undefined' && createPortal(<div ref={menuRef} style={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : { top: 0, left: 0, visibility: 'hidden' }} className="fixed z-[120] min-w-36 rounded-xl border border-border bg-surface p-1 text-foreground shadow-xl shadow-black/25">
               {onEdit && <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Pencil className="size-3.5" />Editar</button>}
               {onDeleteForMe && <button type="button" onClick={() => { setDeleteMode('me'); setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"><Trash2 className="size-3.5" />Apagar para mim</button>}
               {onDelete && new Date(message.data_hora).getTime() >= Date.now() - 60 * 60 * 1000 && <button type="button" onClick={() => { setDeleteMode('all'); setMenuOpen(false); setDeleteDialogOpen(true); }} disabled={saving} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-danger hover:bg-danger/10"><Trash2 className="size-3.5" />Apagar para todos</button>}
-            </div>}
+            </div>, document.body)}
           </div>
         )}
       </div>
