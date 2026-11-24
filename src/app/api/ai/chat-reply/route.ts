@@ -3,6 +3,7 @@ import dns from 'node:dns';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { explicitlyDeclinedDeadline, hasExplicitDeadlineRequest, isTaskCancellationMessage, isTaskClarificationMessage, isTaskInformationQuestion, isTaskCreationRequest, TASK_CLARIFICATION_PREFIX } from '@/lib/ai-task-intent';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 // Algumas redes (principalmente no Windows) anunciam IPv6 sem roteá-lo, e o
@@ -18,7 +19,6 @@ const HISTORY_LIMIT = 12;
 const MAX_MESSAGE_CHARS = 500;
 const MAX_ANSWER_CHARS = 4000;
 const AI_MENTION = /(^|\s)@ia\b/i;
-const CREATE_TASK_COMMAND = /\b(crie|criar|adicione|adicionar|cadastre|cadastrar)\b[\s\S]*\b(tarefa|atividade)\b/i;
 
 type ReplyBody = { chatId?: string };
 
@@ -35,6 +35,7 @@ type TaskDraft = {
   nome: string;
   descricao: string;
   prioridade: 'Baixa' | 'Media' | 'Alta';
+  prioridadeValida: boolean;
   prazo: string | null;
 };
 
@@ -50,19 +51,24 @@ function fail(status: number, error: string, detail?: string) {
 function parseTaskDraft(text: string): TaskDraft {
   const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
   const value = JSON.parse(cleaned) as Record<string, unknown>;
+  const prioritySpecified = value.prioridade !== undefined && value.prioridade !== null && value.prioridade !== '';
+  const prioridadeValida = !prioritySpecified || value.prioridade === 'Baixa' || value.prioridade === 'Media' || value.prioridade === 'Alta';
   const prioridade = value.prioridade === 'Baixa' || value.prioridade === 'Alta' ? value.prioridade : 'Media';
-  const nome = String(value.nome ?? '').trim();
-  if (!nome) throw new Error('A IA não conseguiu identificar o nome da tarefa.');
-
-  const prazo = typeof value.prazo === 'string' && value.prazo.trim() ? value.prazo.trim() : null;
-  if (prazo && !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(?::\d{2})?)?$/.test(prazo)) {
-    throw new Error('A IA retornou um prazo inválido para a tarefa.');
-  }
+  const nome = typeof value.nome === 'string' ? value.nome.trim() : '';
+  const rawPrazo = typeof value.prazo === 'string' ? value.prazo.trim() : '';
+  const dateMatch = rawPrazo.match(/^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2}))?$/);
+  const dateValue = dateMatch?.[1] ?? '';
+  const parsedDate = dateValue ? new Date(`${dateValue}T00:00:00.000Z`) : null;
+  const validCalendarDate = Boolean(parsedDate && !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === dateValue);
+  const todayInBrazil = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const isFutureOrToday = rawPrazo.includes('T') ? Date.parse(rawPrazo) > Date.now() : dateValue >= todayInBrazil;
+  const prazo = validCalendarDate && isFutureOrToday ? rawPrazo : null;
 
   return {
     nome,
-    descricao: String(value.descricao ?? '').trim(),
+    descricao: typeof value.descricao === 'string' ? value.descricao.trim() : '',
     prioridade,
+    prioridadeValida,
     prazo,
   };
 }
@@ -121,11 +127,35 @@ export async function POST(request: NextRequest) {
 
     if (!last) return fail(403, 'Você não tem acesso a este chat.');
 
-    // Só responde quando a última mensagem é do próprio usuário e chama a IA.
-    // Isso impede respostas em cadeia e uso do endpoint sem uma pergunta real.
-    if (last.id_usuario !== userId || !last.conteudo || !AI_MENTION.test(last.conteudo)) {
+    const previousMessage = recent[recent.length - 2];
+    const hasTaskClarification = Boolean(
+      previousMessage?.id_usuario === null &&
+      previousMessage.conteudo &&
+      isTaskClarificationMessage(previousMessage.conteudo),
+    );
+    const cancelTask = Boolean(hasTaskClarification && last.conteudo && isTaskCancellationMessage(last.conteudo));
+    const separateQuestion = Boolean(hasTaskClarification && last.conteudo && isTaskInformationQuestion(last.conteudo));
+    const isTaskFollowUp = Boolean(
+      hasTaskClarification &&
+      !cancelTask &&
+      !separateQuestion &&
+      last.conteudo &&
+      !isTaskCreationRequest(last.conteudo),
+    );
+
+    // A resposta a uma pergunta de esclarecimento continua o fluxo da tarefa sem
+    // exigir que o usuário mencione @IA novamente.
+    if (last.id_usuario !== userId || !last.conteudo || (!AI_MENTION.test(last.conteudo) && !isTaskFollowUp && !cancelTask && !separateQuestion)) {
       return fail(400, 'Não há uma pergunta para a IA nesta conversa.');
     }
+
+    const originalTaskRequest = isTaskFollowUp
+      ? recent.slice(0, -2).reverse().find((message) => message.id_usuario === userId && message.conteudo && isTaskCreationRequest(message.conteudo))
+      : undefined;
+    const taskCommand = isTaskFollowUp && originalTaskRequest?.conteudo
+      ? `${originalTaskRequest.conteudo}\nInformação fornecida após esclarecimento: ${last.conteudo}`
+      : last.conteudo;
+    const isTaskCommand = Boolean(isTaskFollowUp && originalTaskRequest) || isTaskCreationRequest(last.conteudo);
 
     const { data: chat, error: chatError } = await supabase
       .from('chat')
@@ -135,6 +165,29 @@ export async function POST(request: NextRequest) {
     if (chatError) throw new Error(chatError.message);
 
     const projectId = (chat as { id_projeto: string | null } | null)?.id_projeto ?? null;
+    if (isTaskCommand && !projectId) return fail(400, 'A criação de tarefas pela IA só está disponível em um chat associado a um projeto.');
+    if (cancelTask) {
+      const admin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { error: cancellationError } = await admin
+        .from('mensagem')
+        .insert({ id_chat: chatId, id_usuario: null, conteudo: 'Certo, cancelei o pedido de criação da tarefa. Nenhuma tarefa foi criada.' });
+      if (cancellationError) throw new Error(`Não foi possível registrar o cancelamento: ${cancellationError.message}`);
+      return NextResponse.json({ success: true, cancelled: true });
+    }
+    if (isTaskCommand) {
+      const { data: membership, error: membershipError } = await supabase
+        .from('usuario_projeto')
+        .select('papel')
+        .eq('id_projeto', projectId!)
+        .eq('id_usuario', userId)
+        .maybeSingle();
+      if (membershipError) throw new Error(membershipError.message);
+      if (!membership || !['owner', 'member'].includes(membership.papel)) {
+        return fail(403, 'Você não tem permissão para criar tarefas neste projeto.');
+      }
+    }
 
     const names = new Map<string, string>();
     let projectContext: unknown = null;
@@ -164,7 +217,7 @@ export async function POST(request: NextRequest) {
         tarefas: tasksResult.data ?? [],
       };
 
-      if (last.conteudo && CREATE_TASK_COMMAND.test(last.conteudo)) {
+      if (isTaskCommand) {
         const { data: statuses, error: statusesError } = await supabase
           .from('status')
           .select('id_status, nome, ordem')
@@ -174,7 +227,9 @@ export async function POST(request: NextRequest) {
 
         if (statusesError) throw new Error(statusesError.message);
         const firstStatus = statuses?.[0] as { id_status: string; nome: string } | undefined;
-        if (!firstStatus) return fail(400, 'Este projeto ainda não possui um status inicial para receber tarefas.');
+        if (!firstStatus) {
+          return fail(400, 'Este projeto ainda não possui um status cadastrado para receber tarefas. Peça ao responsável pelo projeto para configurar um status.');
+        }
 
         const currentDate = new Intl.DateTimeFormat('en-CA', {
           timeZone: 'America/Sao_Paulo',
@@ -183,10 +238,9 @@ export async function POST(request: NextRequest) {
           day: '2-digit',
         }).format(new Date());
         const taskPrompt = `Você interpreta um pedido de criação de tarefa no Progressus. Responda somente JSON válido, sem markdown.
-Campos obrigatórios: nome, descricao, prioridade e prazo.
-prioridade deve ser exatamente Baixa, Media ou Alta. prazo deve ser uma data ISO com horário e fuso -03:00, no formato YYYY-MM-DDTHH:mm:00-03:00, ou null.
-Considere a data atual ${currentDate} no fuso do Brasil. Se o usuário informar apenas uma data, use 12:00. Não invente informações. Remova @IA do conteúdo.
-Pedido do usuário: ${last.conteudo}`;
+Campos: nome, descricao, prioridade e prazo. O nome é obrigatório e não pode ser inventado. Se não estiver claro, devolva nome como string vazia. prioridade deve ser Baixa, Media ou Alta; se não for informada, use Media. prazo deve ser YYYY-MM-DDTHH:mm:00-03:00 ou null. Se o usuário solicitar explicitamente um prazo que não possa ser interpretado, devolva null. Não invente informações. Remova @IA do conteúdo.
+Considere a data atual ${currentDate} no fuso do Brasil. Se o usuário informar apenas uma data, use 12:00. Projeto é este chat; status será o primeiro status e responsável será o usuário autenticado.
+Pedido e esclarecimentos do usuário: ${taskCommand}`;
 
         const taskResponse = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
@@ -202,6 +256,24 @@ Pedido do usuário: ${last.conteudo}`;
 
         const taskText = taskPayload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
         const draft = parseTaskDraft(taskText);
+        const questions: string[] = [];
+        if (!draft.nome) questions.push('Qual nome devo dar à tarefa?');
+        if (hasExplicitDeadlineRequest(taskCommand) && !explicitlyDeclinedDeadline(taskCommand) && !draft.prazo) questions.push('Qual é o prazo correto? Não consegui validar a data informada; envie uma data futura ou de hoje.');
+        if (draft.nome.length > 160) questions.push('O nome informado é longo demais. Envie um nome com até 160 caracteres.');
+        if (draft.descricao.length > 1000) questions.push('A descrição excede 1000 caracteres. Envie uma versão mais curta.');
+        if (!draft.prioridadeValida) questions.push('Qual prioridade deseja usar: Baixa, Media ou Alta?');
+        if (questions.length > 0) {
+          const clarification = `${TASK_CLARIFICATION_PREFIX}\n${questions.map((question) => `• ${question}`).join('\n')}`;
+          const admin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          });
+          const { error: clarificationError } = await admin
+            .from('mensagem')
+            .insert({ id_chat: chatId, id_usuario: null, conteudo: clarification });
+          if (clarificationError) throw new Error(`Não foi possível solicitar os dados faltantes: ${clarificationError.message}`);
+          return NextResponse.json({ success: true, clarification: true });
+        }
+
         const { data: createdTask, error: insertError } = await supabase
           .from('tarefa')
           .insert({

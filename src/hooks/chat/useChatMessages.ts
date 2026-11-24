@@ -12,6 +12,7 @@ import {
   markChatMessagesAsRead,
 } from "@/lib/chat";
 
+import { isTaskClarificationMessage } from "@/lib/ai-task-intent";
 import { supabase } from "@/lib/supabase";
 
 import type { ChatMessage, ChatMentionDraft } from "@/types/chat";
@@ -398,6 +399,13 @@ export function useChatMessages(
       throw new Error("Digite uma mensagem ou anexe um arquivo.");
     }
 
+    const previousMessage = messagesRef.current[messagesRef.current.length - 1];
+    const answersTaskClarification = Boolean(
+      previousMessage?.id_usuario === null &&
+      previousMessage.conteudo &&
+      isTaskClarificationMessage(previousMessage.conteudo),
+    );
+
     try {
       setIsSending(true);
       setError(null);
@@ -433,7 +441,7 @@ export function useChatMessages(
         mentions.some((mention) => mention.tipo === "ia") ||
         /(^|\s)@ia\b/i.test(content);
 
-      if (mentionsAi && content.trim()) {
+      if ((mentionsAi || answersTaskClarification) && content.trim()) {
         void requestAiReply(chatId);
       }
     } catch (err) {

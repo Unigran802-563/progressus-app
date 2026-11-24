@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { explicitlyDeclinedDeadline, hasExplicitDeadlineRequest } from '@/lib/ai-task-intent';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -10,6 +11,7 @@ type Draft = {
   nome: string;
   descricao: string;
   prioridade: 'Baixa' | 'Media' | 'Alta';
+  prioridadeValida: boolean;
   prazo: string | null;
   projetoNome: string;
 };
@@ -26,17 +28,28 @@ function fail(status: number, error: string, detail?: string) {
 function parseDraft(text: string): Draft {
   const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
   const value = JSON.parse(cleaned) as Record<string, unknown>;
+  const prioritySpecified = value.prioridade !== undefined && value.prioridade !== null && value.prioridade !== '';
+  const prioridadeValida = !prioritySpecified || value.prioridade === 'Baixa' || value.prioridade === 'Media' || value.prioridade === 'Alta';
   const prioridade = value.prioridade === 'Baixa' || value.prioridade === 'Alta' ? value.prioridade : 'Media';
-  const nome = String(value.nome ?? '').trim();
-  const projetoNome = String(value.projetoNome ?? '').trim();
-  if (!nome) throw new Error('A IA não conseguiu identificar o nome da tarefa.');
+  const nome = typeof value.nome === 'string' ? value.nome.trim() : '';
+  const projetoNome = typeof value.projetoNome === 'string' ? value.projetoNome.trim() : '';
+  const rawPrazo = typeof value.prazo === 'string' ? value.prazo.trim() : '';
+  const prazo = /^\d{4}-\d{2}-\d{2}$/.test(rawPrazo) && isValidDate(rawPrazo) ? rawPrazo : null;
   return {
     nome,
     projetoNome,
-    descricao: String(value.descricao ?? '').trim(),
+    descricao: typeof value.descricao === 'string' ? value.descricao.trim() : '',
     prioridade,
-    prazo: typeof value.prazo === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.prazo) ? value.prazo : null,
+    prioridadeValida,
+    prazo,
   };
+}
+
+function isValidDate(value: string): boolean {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return false;
+  const todayInBrazil = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return value >= todayInBrazil;
 }
 
 export async function POST(request: NextRequest) {
@@ -62,13 +75,15 @@ export async function POST(request: NextRequest) {
 
     const { data: projects, error: projectsError } = await supabase.rpc('list_accessible_projects', { p_incluir_arquivados: false });
     if (projectsError) throw new Error(projectsError.message);
-    const availableProjects = (projects ?? []) as Array<{ id_projeto: string; nome: string; arquivado_em: string | null; meu_papel: string }>;
-    if (availableProjects.length === 0) return fail(400, 'Você ainda não possui projetos ativos para receber uma tarefa.');
+    const projectsAccessible = (projects ?? []) as Array<{ id_projeto: string; nome: string; arquivado_em: string | null; meu_papel: string }>;
+    const availableProjects = projectsAccessible.filter((project) => project.meu_papel === 'owner' || project.meu_papel === 'member');
+    if (availableProjects.length === 0) return fail(403, 'Você não tem permissão para criar tarefas em nenhum projeto ativo.');
 
+    const currentDateInBrazil = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const prompt = `Você interpreta comandos de criação de tarefas do Progressus. Responda somente JSON válido.
 Campos: nome, descricao, prioridade, prazo e projetoNome.
-prioridade deve ser Baixa, Media ou Alta. prazo deve ser YYYY-MM-DD ou null. Se o usuário disser hoje, amanhã ou esta semana, calcule usando a data atual ${new Date().toISOString().slice(0, 10)}.
-Escolha projetoNome exatamente de uma opção disponível. Não invente projeto. Se o usuário não informar o projeto e houver apenas uma opção disponível, use essa opção. Se houver mais de uma opção e o projeto não puder ser identificado, use projetoNome como string vazia para que o sistema peça esclarecimento. descricao e prazo podem ser null. O status informado pelo usuário é opcional; a tarefa usará o primeiro status do projeto.
+prioridade deve ser Baixa, Media ou Alta. Se não for informada, use Media. prazo deve ser YYYY-MM-DD ou null. Se o usuário mencionar um prazo que você não consiga interpretar com segurança, use null. Se disser hoje, amanhã ou esta semana, calcule usando a data atual ${currentDateInBrazil} no fuso America/Sao_Paulo.
+Não invente o nome da tarefa: se o pedido não informar claramente o nome, use uma string vazia. Escolha projetoNome exatamente de uma opção disponível. Não invente projeto. Se o usuário não informar o projeto e houver apenas uma opção disponível, use essa opção. Se houver mais de uma opção e o projeto não puder ser identificado, use projetoNome como string vazia. descricao pode ser vazia. O status será o primeiro status do projeto e o responsável será o usuário autenticado.
 Projetos disponíveis: ${JSON.stringify(availableProjects.map((project) => project.nome))}
 Comando do usuário: ${message}`;
 
@@ -89,21 +104,28 @@ Comando do usuário: ${message}`;
       : availableProjects.length === 1
         ? availableProjects[0]
         : undefined;
-    if (!project) {
-      return fail(
-        400,
-        availableProjects.length > 1
-          ? `Informe em qual projeto deseja criar a tarefa. Projetos disponíveis: ${availableProjects.map((item) => item.nome).join(', ')}.`
-          : 'Não consegui associar o comando a um projeto ativo permitido.',
-      );
+    const questions: string[] = [];
+    if (!draft.nome) questions.push('Qual nome devo dar à tarefa?');
+    if (draft.nome.length > 160) questions.push('O nome informado é longo demais. Envie um nome com até 160 caracteres.');
+    if (draft.descricao.length > 1000) questions.push('A descrição excede 1000 caracteres. Envie uma versão mais curta.');
+    if (!draft.prioridadeValida) questions.push('Qual prioridade deseja usar: Baixa, Media ou Alta?');
+    if (!project) questions.push(`Em qual projeto ativo deseja criá-la? Escolha entre: ${availableProjects.map((item) => item.nome).join(', ')}.`);
+    if (hasExplicitDeadlineRequest(message) && !explicitlyDeclinedDeadline(message) && !draft.prazo) questions.push('Qual é o prazo correto? Não consegui interpretar a data informada.');
+    if (questions.length > 0) {
+      return NextResponse.json({ success: true, clarification: `Para criar a tarefa, preciso destas informações:\n${questions.map((question) => `• ${question}`).join('\n')}` });
     }
+
+    if (!project) return fail(400, 'Não foi possível identificar um projeto válido para a tarefa.');
 
     const { data: statuses, error: statusError } = await supabase.from('status').select('id_status, nome, ordem').eq('id_projeto', project.id_projeto).order('ordem', { ascending: true }).limit(20);
     if (statusError) throw new Error(statusError.message);
     const firstStatus = statuses?.[0] as { id_status: string; nome: string } | undefined;
-    if (!firstStatus) return fail(400, 'O projeto não possui status inicial para receber a tarefa.');
+    if (!firstStatus) {
+      return NextResponse.json({ success: true, clarification: `O projeto ${project.nome} não possui status para receber tarefas. Escolha outro projeto ativo ou peça ao responsável pelo projeto para cadastrar um status.` });
+    }
 
-    return NextResponse.json({ success: true, draft: { ...draft, projectId: project.id_projeto, projectName: project.nome, statusId: firstStatus.id_status, statusName: firstStatus.nome, responsibleId: authData.user.id } });
+    const { prioridadeValida: _prioridadeValida, ...validatedDraft } = draft;
+    return NextResponse.json({ success: true, draft: { ...validatedDraft, projectId: project.id_projeto, projectName: project.nome, statusId: firstStatus.id_status, statusName: firstStatus.nome, responsibleId: authData.user.id } });
   } catch (error) {
     console.error('Erro ao interpretar comando de tarefa:', error);
     return fail(500, error instanceof Error ? error.message : 'Não foi possível interpretar o comando.');

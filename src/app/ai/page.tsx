@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 
 import AppShell from '@/components/layout/AppShell';
 import { EmptyState, PageHeader } from '@/components/ui/progressus-ui';
+import { isTaskCreationRequest, isTaskInformationQuestion } from '@/lib/ai-task-intent';
 import { supabase } from '@/lib/supabase';
 
 type Message = { id: string; role: 'user' | 'assistant'; text: string };
@@ -22,6 +23,7 @@ export default function AiPage() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingTask, setPendingTask] = useState<TaskDraft | null>(null);
+  const [pendingTaskCommand, setPendingTaskCommand] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -46,6 +48,22 @@ export default function AiPage() {
   async function ask(question: string) {
     const text = question.trim();
     if (!text || sending) return;
+    const hasPendingClarification = Boolean(pendingTaskCommand);
+    const normalizedText = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    if (hasPendingClarification && /\b(?:cancelar|cancele|desistir|esquece)\b/.test(normalizedText)) {
+      setMessages((current) => [...current, { id: `${Date.now()}-user`, role: 'user', text }, { id: `${Date.now()}-assistant`, role: 'assistant', text: 'Certo, cancelei o pedido de criação da tarefa.' }]);
+      setPendingTaskCommand(null);
+      setInput('');
+      setError('');
+      return;
+    }
+    const isSeparateQuestion = hasPendingClarification && isTaskInformationQuestion(text);
+    if (isSeparateQuestion) setPendingTaskCommand(null);
+    const isFollowUp = hasPendingClarification && !isSeparateQuestion && !isTaskCreationRequest(text);
+    const taskCommand = isFollowUp
+      ? `${pendingTaskCommand}\nResposta do usuário ao pedido de esclarecimento: ${text}`
+      : text;
+    const wantsTask = isTaskCreationRequest(text) || isFollowUp;
     const userMessage: Message = { id: `${Date.now()}-user`, role: 'user', text };
     setMessages((current) => [...current, userMessage]);
     setInput('');
@@ -53,11 +71,24 @@ export default function AiPage() {
     setError('');
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const wantsTask = /\b(crie|criar|adicione|adicionar|cadastre)\b[\s\S]*\b(tarefa|atividade)\b/i.test(text);
       if (wantsTask) {
-        const response = await fetch('/api/ai/task-command', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` }, body: JSON.stringify({ message: text }) });
-        const result = (await response.json()) as { draft?: TaskDraft; error?: string };
-        if (!response.ok || !result.draft) throw new Error(result.error || 'Não foi possível preparar a tarefa.');
+        setPendingTaskCommand(taskCommand);
+        setPendingTask(null);
+        const response = await fetch('/api/ai/task-command', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token ?? ''}` }, body: JSON.stringify({ message: taskCommand }) });
+        const result = (await response.json()) as { draft?: TaskDraft; clarification?: string; error?: string };
+        if (!response.ok) {
+          setPendingTaskCommand(null);
+          throw new Error(result.error || 'Não foi possível preparar a tarefa.');
+        }
+        if (result.clarification) {
+          setMessages((current) => [...current, { id: `${Date.now()}-assistant`, role: 'assistant', text: `${result.clarification}\nResponda com as informações solicitadas ou diga “cancelar”.` }]);
+          return;
+        }
+        if (!result.draft) {
+          setPendingTaskCommand(null);
+          throw new Error(result.error || 'Não foi possível validar os dados da tarefa.');
+        }
+        setPendingTaskCommand(null);
         setPendingTask(result.draft);
         setMessages((current) => [...current, { id: `${Date.now()}-assistant`, role: 'assistant', text: 'Preparei esta tarefa com base no seu pedido. Revise os dados e confirme para criar.' }]);
         return;
@@ -80,7 +111,7 @@ export default function AiPage() {
       const result = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(result.error || 'Não foi possível criar a tarefa.');
       setMessages((current) => [...current, { id: `${Date.now()}-assistant`, role: 'assistant', text: 'Tarefa criada com sucesso e vinculada ao projeto.' }]);
-      setPendingTask(null); window.dispatchEvent(new Event('progressus:tasks-changed'));
+      setPendingTask(null); setPendingTaskCommand(null); window.dispatchEvent(new Event('progressus:tasks-changed'));
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível criar a tarefa.'); }
     finally { setSending(false); }
   }
